@@ -1,82 +1,127 @@
-# dl-candidate
+# Legal Document Extractor
 
-## Assignment: Legal Document Data Extraction
+A Streamlit application that extracts structured data from Greek notarial deeds using Google Gemini Vision models.
 
-This task is designed to assess your problem-solving skills, code quality, and ability to work with an end-to-end process.
+---
 
-## The Challenge
+## Overview
 
-The core challenge of this assignment is to build a solution that can extract structured data from a provided legal document using a **VLM**.
+The pipeline converts a PDF into page images, sends them to a Vision Language Model (VLM), and returns a structured JSON object with all key information from the deed — parties, property details, transaction data, and notary information.
 
-You will be given a sample legal document in PDF. Your task is to use a method of your choice to:
+An evaluation module benchmarks **Gemini 2.5 Flash** against **Gemini 2.5 Pro** on the same document, measuring extraction completeness and latency.
 
-1. **Process the Document**: Handle the input PDF or image, preparing it for text recognition.
+---
 
-2. **Identify Key Information**: Extract specific information from each page. For example, you might need to extract a case number, party names, or specific clauses.
+## Architecture
 
-3. **Present Results**: Store the extracted data in a structured format (e.g., a JSON object) and showcase the entire process in a simple Streamlit web application.
+```
+PDF
+ └── pdf_to_images()        # PyMuPDF → JPEG pages (cached on disk)
+      └── BaseExtractor
+           └── GeminiExtractor.extract()   # PIL images + prompt → JSON
+                └── run_pipeline()         # public entry point
+                     ├── app.py            # Streamlit UI
+                     └── evaluate.py       # Flash vs Pro benchmark
+```
 
-We're not looking for a perfect, production-ready system. We want to see how you approach the problem, what tools and libraries you choose to use, and how you structure your code.
+---
 
-## Specific Data Points to Extract
+## Design Decisions
 
-The basic characteristics of a property deed (Τα βασικά χαρακτηριστικά ενός τίτλου ιδιοκτησίας) include:
+### Why a VLM instead of a PDF text parser?
+Greek notarial deeds are often scanned documents — plain text extraction via `pdfplumber` or `pdfminer` fails on scanned pages. A VLM reads the document visually, the same way a human would.
 
-### Involved Parties (Ενεχόμενοι-συμβαλλόμενα μέρη)
+### Why Gemini?
+Google AI Studio provides free-tier access to both Flash and Pro models, making it practical for this assignment. The architecture supports adding other providers (e.g. GPT-4o) by extending `BaseExtractor`.
 
-- **Names and details** (Tax ID numbers, addresses, identity documents) of the seller and buyer, and/or their representatives (as there may be a legal representative attorney who will sign it).
+### Why `BaseExtractor` as an ABC?
+Enforces a consistent interface across providers. Any new backend must implement `extract()` — the rest of the pipeline doesn't need to change.
 
-- **Note**: There may be more than one seller or buyer. When there are multiple buyers or sellers, we have a list. The same applies to their representatives.
+### Why `area_sqm` and `price` as numbers, not strings?
+To support downstream calculations (e.g. price per sqm) without extra parsing. A string would require conversion every time.
 
-- In the case of parental provision, the seller is considered to be the parent(s) and the buyer is the child(ren).
+### Why `_meta` in every response?
+Observability — knowing which model ran, how many pages were processed, and how long it took is essential for debugging and evaluation.
 
-- The number of contracting parties is always shown in their signatures on the last page.
+### Why DPI 150 for page images?
+A trade-off between quality and speed. Lower DPI means smaller files and faster API calls but risks losing fine text. 150 DPI was sufficient for this document type.
 
-- **Notary details**.
+### Evaluation methodology
+Without a ground-truth annotated dataset, exact accuracy cannot be measured. Instead, we use **completeness** (percentage of non-null fields) as a proxy, and **field-level disagreement** between models as a consistency signal. Latency is measured with `time.perf_counter()` for precision.
 
-### Property Details (Στοιχεία ακινήτου)
+---
 
-- **Location** (Address, municipal unit, area, building block).
+## Project Structure
 
-- **Type of property** (apartment, store, plot, etc.).
+```
+.
+├── app.py                          # Streamlit UI (Extraction + Evaluation tabs)
+├── extractor.py                    # PDF → images → VLM → JSON
+├── evaluate.py                     # Flash vs Pro benchmark
+├── Dockerfile                      
+├── docker-compose.yml              
+├── requirements.txt                
+└── simbolaio-agorapolisias-public.pdf   # Sample notarial deed
+```
 
-- **Area, floor** (e.g., E2).
+---
 
-- **Land registry details** - KAEK (Κτηματολογικά στοιχεία - ΚΑΕΚ).
+## Setup & Run
 
-- **Building permit number** (where applicable).
+### Option 1 — Docker (recommended)
 
-## Getting Started
+```bash
+docker compose up --build
+```
 
-You can start by cloning this repository. The sample legal document (`simbolaio-agorapolisias-public.pdf`) is included in the repository.
+Open [http://localhost:8501](http://localhost:8501) in your browser.
 
-## Deliverables
+### Option 2 — Local Python
 
-Your submission should include:
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-1. **Your Code**: The complete source code for your solution, including the Streamlit application.
+---
 
-2. **A Brief Write-up**: A short document (either in the README itself or a separate file) that explains:
-   - Your overall approach and design decisions.
-   - The tools, frameworks, and libraries you used and why.
-   - Any assumptions you made.
+## Usage
 
-3. **Instructions**: Clear, simple instructions on how to set up and run your code, including how to launch the Streamlit app.
+1. Get a free Gemini API key at [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Enter it in the sidebar
+3. Select a model (Flash: faster / Pro: more accurate)
+4. Upload a PDF or use the included sample document
+5. Click **Run Extraction**
 
-**Note**: While not mandatory, it is recommended to containerize your Streamlit application using Docker for easier deployment and reproducibility.
+To benchmark both models, go to the **Evaluation** tab and click **Run Evaluation**.
 
-## Evaluation & Comparison (Optional but Strongly Recommended)
+---
 
-Once you have a working pipeline, reflect on its quality. How do you know it performs well? Consider running your extraction across more than one configuration — this could mean different models, different prompt strategies, or different pre-processing approaches.
+## Extracted Fields
 
-Design your own evaluation methodology: decide what to measure, how to measure it, and how to present your findings in a structured, comparable way.  Focus your comparison on the quality of extraction (**accuracy**) and runtime performance (**speed**)
+| Section | Fields |
+|---|---|
+| Notary | name, location, registry number |
+| Sellers | full name, tax ID, ID document, address |
+| Buyers | full name, tax ID, ID document, address |
+| Legal Representatives | full name, represents, tax ID, ID document |
+| Property | type, address, municipal unit, floor, area (sqm), KAEK, building permit |
+| Transaction | deed type, price, date |
 
-## Optional Enhancements
+---
 
-If you have extra time and want to showcase your skills further, consider implementing one or more of the following:
+## Assumptions
 
-- **Error Handling**: Implement robust error handling for cases where text or data cannot be reliably extracted.
+- A deed may have multiple sellers, buyers, and legal representatives — all are extracted as lists.
+- In parental provision deeds, the parent is treated as the seller and the child as the buyer.
+- If a field is not found in the document, it is returned as `null`.
+- Page images are cached in `pages/` to avoid re-processing on subsequent runs.
 
-- **Multiple Document Types**: Design your solution to handle different legal document formats, even if you only process one as a primary example.
+---
 
-- **Performance Optimization**: Comment on potential bottlenecks and how you would optimize your solution for speed or scale.
+## Potential Improvements
+
+- **Ground-truth evaluation**: human-annotated dataset for exact accuracy measurement
+- **Multi-document support**: different schemas and prompts per document type (lease, will, etc.)
+- **Async processing**: parallel page processing for large documents
+- **Confidence scores**: prompt the model to return a confidence value per field
