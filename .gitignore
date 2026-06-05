@@ -1,5 +1,20 @@
+# Python
 venv/
-pages/
 __pycache__/
 *.pyc
+*.pyo
 .env
+
+# App cache
+pages/
+
+# Extracted outputs
+extracted_data.json
+evaluation_results.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

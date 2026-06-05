@@ -172,16 +172,25 @@ def run_pipeline(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import argparse
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
     )
+
+    parser = argparse.ArgumentParser(description="Extract structured data from a notarial deed PDF.")
+    parser.add_argument("--pdf",    default="sample.pdf",           help="Path to the input PDF")
+    parser.add_argument("--output", default="extracted_data.json",  help="Output JSON path")
+    parser.add_argument("--model",  default="gemini-2.5-flash",     choices=GeminiExtractor.MODELS)
+    args = parser.parse_args()
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-    result = run_pipeline(pdf_path="simbolaioagorapolisiaspublic.pdf", api_key=api_key)
+    result = run_pipeline(pdf_path=args.pdf, api_key=api_key, model_name=args.model)
 
-    output = Path("extracted_data.json")
+    output = Path(args.output)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(output.read_text(encoding="utf-8"))

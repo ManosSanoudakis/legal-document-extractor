@@ -178,7 +178,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(description="Benchmark Gemini models on a PDF.")
-    parser.add_argument("--pdf",    default="simbolaioagorapolisiaspublic.pdf")
+    parser.add_argument("--pdf",    default="sample.pdf")
     parser.add_argument("--output", default="evaluation_results.json")
     args = parser.parse_args()
 
