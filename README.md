@@ -60,9 +60,10 @@ Without a ground-truth annotated dataset, exact accuracy cannot be measured. Ins
 ├── evaluate.py                     # Flash vs Pro benchmark
 ├── Dockerfile                      
 ├── docker-compose.yml              
-├── requirements.txt                
-└── simbolaio-agorapolisias-public.pdf   # Sample notarial deed
+└── requirements.txt                
 ```
+
+> **Note:** No sample PDF is included in this repository. The app was developed and tested against a real Greek notarial deed which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). To try the app, upload any Greek notarial deed PDF via the UI.
 
 ---
 

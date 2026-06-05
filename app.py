@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DEFAULT_PDF = "simbolaio-agorapolisias-public.pdf"
+DEFAULT_PDF = "sample.pdf"
 
 # ---------------------------------------------------------------------------
 # Types
