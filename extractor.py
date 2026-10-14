@@ -180,7 +180,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(description="Extract structured data from a notarial deed PDF.")
-    parser.add_argument("--pdf",    default="sample.pdf",           help="Path to the input PDF")
+    parser.add_argument("--pdf",    required=True,                  help="Path to the input PDF")
     parser.add_argument("--output", default="extracted_data.json",  help="Output JSON path")
     parser.add_argument("--model",  default="gemini-2.5-flash",     choices=GeminiExtractor.MODELS)
     args = parser.parse_args()

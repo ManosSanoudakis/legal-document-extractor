@@ -18,8 +18,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DEFAULT_PDF = "sample.pdf"
-
 # ---------------------------------------------------------------------------
 # Types
 # ---------------------------------------------------------------------------
@@ -76,8 +74,6 @@ def resolve_pdf(uploaded_file) -> tuple[str | None, bool]:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(uploaded_file.read())
             return tmp.name, True
-    if Path(DEFAULT_PDF).exists():
-        return DEFAULT_PDF, False
     return None, False
 
 # ---------------------------------------------------------------------------
@@ -291,10 +287,7 @@ def page_extraction(api_key: str, model: str) -> None:
 
     uploaded_file = st.file_uploader("Upload PDF document", type=["pdf"])
     if uploaded_file is None:
-        st.info(
-            f"💡 No file uploaded — the sample document "
-            f"**{DEFAULT_PDF}** will be used."
-        )
+        st.info("💡 Upload a Greek notarial deed PDF to get started.")
 
     if not st.button("🚀 Run Extraction", type="primary", use_container_width=True):
         if "result" in st.session_state:
@@ -307,7 +300,7 @@ def page_extraction(api_key: str, model: str) -> None:
 
     pdf_path, we_own_file = resolve_pdf(uploaded_file)
     if pdf_path is None:
-        st.error(f"❌ Sample file not found: **{DEFAULT_PDF}**. Please upload a PDF.")
+        st.error("❌ Please upload a PDF document.")
         return
 
     try:
@@ -348,10 +341,7 @@ def page_evaluation(api_key: str) -> None:
         "Upload PDF document", type=["pdf"], key="eval_upload",
     )
     if uploaded_file is None:
-        st.info(
-            f"💡 No file uploaded — the sample document "
-            f"**{DEFAULT_PDF}** will be used."
-        )
+        st.info("💡 Upload a Greek notarial deed PDF to get started.")
 
     if not st.button(
         "⚡ Run Evaluation", type="primary", use_container_width=True
@@ -366,7 +356,7 @@ def page_evaluation(api_key: str) -> None:
 
     pdf_path, we_own_file = resolve_pdf(uploaded_file)
     if pdf_path is None:
-        st.error(f"❌ Sample file not found: **{DEFAULT_PDF}**. Please upload a PDF.")
+        st.error("❌ Please upload a PDF document.")
         return
 
     try:

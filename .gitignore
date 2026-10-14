@@ -5,6 +5,9 @@ __pycache__/
 *.pyo
 .env
 
+# Input documents (may contain personal data)
+*.pdf
+
 # App cache
 pages/
 

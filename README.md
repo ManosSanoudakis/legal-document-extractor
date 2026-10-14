@@ -91,7 +91,7 @@ streamlit run app.py
 1. Get a free Gemini API key at [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 2. Enter it in the sidebar
 3. Select a model (Flash: faster / Pro: more accurate)
-4. Upload a PDF or use the included sample document
+4. Upload a Greek notarial deed PDF
 5. Click **Run Extraction**
 
 To benchmark both models, go to the **Evaluation** tab and click **Run Evaluation**.
