@@ -3,15 +3,21 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 
 import fitz
 from google import genai
+from google.genai import types
 from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+# Caps response size (and cost). Gemini 2.5 counts "thinking" tokens here too,
+# so this is set well above the ~1-2k tokens the JSON itself needs.
+MAX_OUTPUT_TOKENS = 16_384
 
 # ---------------------------------------------------------------------------
 # Schema & Prompt
@@ -60,24 +66,23 @@ Schema:
 
 def pdf_to_images(
     pdf_path: str,
-    output_dir: str = "pages",
+    output_dir: str,
     dpi: int = 150,
 ) -> list[Path]:
-    """Rasterise every PDF page to JPEG; cache results on disk."""
+    """Rasterise every PDF page to JPEG in output_dir."""
     path = Path(pdf_path)
     if not path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open(str(path))
 
     paths: list[Path] = []
-    for i, page in enumerate(doc, start=1):
-        dest = out / f"{i}.jpeg"
-        if not dest.exists():
+    with fitz.open(str(path)) as doc:
+        for i, page in enumerate(doc, start=1):
+            dest = out / f"{i}.jpeg"
             page.get_pixmap(dpi=dpi).save(str(dest))
-        paths.append(dest)
+            paths.append(dest)
 
     logger.info("%d page(s) ready in '%s/'", len(paths), out)
     return paths
@@ -97,9 +102,10 @@ class BaseExtractor(ABC):
     def extract(self, image_paths: list[Path]) -> dict: ...
 
     @staticmethod
-    def _parse_response(text: str) -> dict:
+    def _parse_response(text: str | None) -> dict:
+        # text is None when the model returns no content (e.g. hit the token cap)
         clean = (
-            text.strip()
+            (text or "").strip()
             .removeprefix("```json")
             .removeprefix("```")
             .removesuffix("```")
@@ -132,12 +138,20 @@ class GeminiExtractor(BaseExtractor):
         client = genai.Client(api_key=self.api_key)
         images = [Image.open(p) for p in image_paths]
 
-        t0 = time.perf_counter()
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=[*images, PROMPT],
-        )
-        elapsed = time.perf_counter() - t0
+        try:
+            t0 = time.perf_counter()
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=[*images, PROMPT],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=MAX_OUTPUT_TOKENS,
+                ),
+            )
+            elapsed = time.perf_counter() - t0
+        finally:
+            # Release file handles so the page images can be deleted
+            for img in images:
+                img.close()
         logger.info(
             "Gemini response in %.2fs — model=%s pages=%d",
             elapsed, self.model_name, len(images),
@@ -161,11 +175,15 @@ def run_pipeline(
     pdf_path: str,
     api_key: str,
     model_name: str = "gemini-2.5-flash",
-    pages_dir: str = "pages",
 ) -> dict:
-    """PDF → page images → VLM extraction → structured dict."""
-    image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
-    return _get_extractor(model_name, api_key).extract(image_paths)
+    """PDF → page images → VLM extraction → structured dict.
+
+    Page images are written to a temporary directory that is deleted
+    afterwards, so no document data is left on disk.
+    """
+    with tempfile.TemporaryDirectory() as pages_dir:
+        image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
+        return _get_extractor(model_name, api_key).extract(image_paths)
 
 # ---------------------------------------------------------------------------
 # CLI

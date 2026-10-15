@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -119,16 +120,17 @@ def run_evaluation(
     pdf_path: str,
     api_key: str,
     models: list[str] | None = None,
-    pages_dir: str = "pages",
 ) -> dict:
     """
     Run extraction with each model and return a comparison report.
+
+    Page images are written to a temporary directory that is deleted
+    once all models have run.
 
     Args:
         pdf_path:  Path to the input PDF.
         api_key:   Gemini API key.
         models:    Models to benchmark (default: flash + pro).
-        pages_dir: Directory for cached page images.
 
     Returns:
         Evaluation report dict suitable for JSON serialisation.
@@ -136,8 +138,9 @@ def run_evaluation(
     if models is None:
         models = GeminiExtractor.MODELS
 
-    image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
-    runs = [_run_once(image_paths, api_key, m) for m in models]
+    with tempfile.TemporaryDirectory() as pages_dir:
+        image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
+        runs = [_run_once(image_paths, api_key, m) for m in models]
 
     report: dict = {
         "pdf": pdf_path,

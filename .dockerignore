@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+.git/
+.claude/
+.env
+*.pdf
+!samples/sample_deed.pdf
+frontend/node_modules/
+frontend/dist/
