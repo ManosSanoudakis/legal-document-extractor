@@ -1,4 +1,4 @@
-import type { AppConfig, DocumentChoice, EvaluationReport, ExtractionResult } from "./types";
+import type { AppConfig, DocumentChoice, EvaluationReport, ExtractionResult, ValidationIssue } from "./types";
 
 export const SAMPLE_URL = "/api/sample";
 
@@ -50,4 +50,33 @@ export function evaluate(doc: DocumentChoice, apiKey: string): Promise<Evaluatio
     headers: { "X-Gemini-Key": apiKey },
     body: documentForm(doc),
   });
+}
+
+/** Re-run the backend checks on a deed the user has edited. */
+export async function validate(deed: ExtractionResult): Promise<ValidationIssue[]> {
+  const body = await request<{ issues: ValidationIssue[] }>("/api/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(deed),
+  });
+  return body.issues;
+}
+
+/** Download the deed as an Excel or CSV file. */
+export async function exportDeed(deed: ExtractionResult, format: "xlsx" | "csv"): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/export?format=${format}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(deed),
+    });
+  } catch {
+    throw new ApiError("Cannot reach the API server. Is the backend running?", 0);
+  }
+  if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: `extracted_deed.${format}` });
+  a.click();
+  URL.revokeObjectURL(url);
 }

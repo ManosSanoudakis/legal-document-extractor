@@ -10,17 +10,20 @@ import json
 import logging
 import os
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Iterator
+from typing import Annotated, Literal
 
 import fitz
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, Response
 from google.genai import errors as genai_errors
 
 from evaluate import run_evaluation
+from export import to_csv, to_xlsx
 from extractor import GeminiExtractor, run_pipeline
+from validators import validate_deed
 
 logging.basicConfig(
     level=logging.INFO,
@@ -172,7 +175,41 @@ def evaluate(
     # Per-model failures are caught inside run_evaluation; if every model
     # failed for the same auth reason, surface it as a proper HTTP error.
     errors = [m["error"] for m in report["models"] if m.get("error")]
-    if errors and len(errors) == len(report["models"]):
-        if all("API key" in e or "API_KEY_INVALID" in e for e in errors):
-            raise HTTPException(401, "Gemini rejected the API key.")
+    all_failed = errors and len(errors) == len(report["models"])
+    if all_failed and all("API key" in e or "API_KEY_INVALID" in e for e in errors):
+        raise HTTPException(401, "Gemini rejected the API key.")
     return report
+
+
+# Edited results: the UI re-checks and exports the user's corrected deed.
+# These only process the JSON sent in the request; nothing is stored.
+
+def _checked(action, deed: dict):
+    try:
+        return action(deed)
+    except (AttributeError, TypeError, ValueError, KeyError):
+        raise HTTPException(422, "The deed data is not in the expected shape.") from None
+
+
+@app.post("/api/validate")
+def validate(deed: Annotated[dict, Body()]) -> dict:
+    return {"issues": _checked(validate_deed, deed)}
+
+
+EXPORTS = {
+    "csv": (to_csv, "text/csv; charset=utf-8"),
+    "xlsx": (to_xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+}
+
+
+@app.post("/api/export")
+def export(
+    deed: Annotated[dict, Body()],
+    format: Annotated[Literal["csv", "xlsx"], Query()] = "xlsx",
+) -> Response:
+    build, media_type = EXPORTS[format]
+    return Response(
+        _checked(build, deed),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="deed.{format}"'},
+    )

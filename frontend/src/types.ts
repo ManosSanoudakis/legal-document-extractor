@@ -29,9 +29,17 @@ export interface ExtractionResult {
     building_permit?: string | null;
   } | null;
   transaction?: { deed_type?: string | null; price?: number | string | null; date?: string | null } | null;
+  sources?: Source[] | null;
   _meta?: { model: string; provider: string; pages: number; elapsed_seconds: number };
   _validation?: ValidationIssue[];
   _error?: string;
+}
+
+/** Where the model found a value: page number and the exact text it read. */
+export interface Source {
+  field: string;
+  page: number | null;
+  quote: string | null;
 }
 
 /** A sanity check that failed (see validators.py). */

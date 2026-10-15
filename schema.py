@@ -55,9 +55,21 @@ class Transaction(BaseModel):
         description="sale = πώληση, parental_provision = γονική παροχή, donation = δωρεά, other = anything else"
     )
     price: float | None = Field(
-        description="Agreed price (τίμημα / αντάλλαγμα) in euros as a number, e.g. 185000. Null if the deed has no price"
+        description="Agreed price (τίμημα / αντάλλαγμα) in euros as a number, e.g. 185000. "
+        "Null if the deed has no price"
     )
     date: str | None = Field(description="Date the deed was signed, formatted YYYY-MM-DD")
+
+
+class Source(BaseModel):
+    field: str = Field(
+        description='Path of the field this entry supports, e.g. "sellers[0].tax_id", "property.kaek", '
+        '"transaction.price"'
+    )
+    page: int | None = Field(description="Page number where the value appears (the first page is 1)")
+    quote: str | None = Field(
+        description="Exact text copied from the document that contains the value, at most 25 words"
+    )
 
 
 class Deed(BaseModel):
@@ -69,6 +81,9 @@ class Deed(BaseModel):
     )
     property: Property
     transaction: Transaction
+    sources: list[Source] = Field(
+        description="Where each value was found: one entry for every non-null field, so a person can verify it"
+    )
 
 
 def empty_deed() -> dict:
@@ -80,4 +95,5 @@ def empty_deed() -> dict:
         "legal_representatives": [],
         "property": dict.fromkeys(Property.model_fields),
         "transaction": dict.fromkeys(Transaction.model_fields),
+        "sources": [],
     }

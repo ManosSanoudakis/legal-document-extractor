@@ -189,8 +189,8 @@ def run_evaluation(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import os
     import argparse
+    import os
 
     logging.basicConfig(
         level=logging.INFO,

@@ -1,5 +1,7 @@
 # Legal Document Extractor
 
+[![CI](https://github.com/ManosSanoudakis/legal-document-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/ManosSanoudakis/legal-document-extractor/actions/workflows/ci.yml)
+
 A full-stack application that extracts structured data from Greek notarial deeds using Google Gemini vision models — a **FastAPI** backend and a **React + TypeScript** frontend, run together with Docker Compose.
 
 ---
@@ -12,6 +14,16 @@ The pipeline converts a PDF into page images, sends them to a Vision Language Mo
 - **Automatic checks**: every extraction is validated (ΑΦΜ check digits, ΚΑΕΚ format, impossible dates, non-positive amounts) and problems are shown next to the results.
 - **Measured accuracy**: a labelled set of fictional deeds gives field-level accuracy, not just a count of filled-in fields.
 - **Model comparison**: Gemini Flash and Pro run side by side on the same document, scored on accuracy, completeness and latency.
+- **Source for every value**: the model cites the page and exact text each value came from; one click shows that page in the preview.
+- **Review and export**: correct any value in place (checks re-run automatically), then download Excel or CSV.
+
+![Extraction results for the fictional sample deed](docs/screenshots/extraction.png)
+
+<sub>Screenshots use the fictional sample deed with demo data (no model call). Regenerate them from a real run with `python scripts/screenshots.py` and a `GEMINI_API_KEY`.</sub>
+
+| Source quotes | Editing |
+|---|---|
+| ![Sources tab with page links and quotes](docs/screenshots/sources.png) | ![Edit mode with input fields](docs/screenshots/editing.png) |
 
 ---
 
@@ -54,6 +66,9 @@ Asking for JSON in the prompt works most of the time, but the model can still wr
 ### Why validate the output?
 A vision model can misread one digit of a tax ID and still sound confident. Some errors can be caught without the source document: the Greek ΑΦΜ has a check digit, a ΚΑΕΚ has 12 digits, a deed cannot be signed in the future, and a price must be positive. Problems are reported, never silently corrected, so a person can verify them against the PDF.
 
+### Why ask for a source quote per value?
+A reviewer should not have to search a 20-page deed to verify one tax ID. Each value comes with its page and the text it was read from. The quotes also enable a cheap hallucination check: if a copied value (name, ΑΦΜ, ΚΑΕΚ) does not appear in its own quote, it is flagged.
+
 ### Why `area_sqm` and `price` as numbers, not strings?
 To support downstream calculations (e.g. price per sqm) without extra parsing. A string would require conversion every time.
 
@@ -78,7 +93,9 @@ Real deeds cannot be shared, so `samples/make_sample_deed.py` generates fictiona
 
 Latency is measured with `time.perf_counter()`. Both models run in parallel, so an evaluation takes as long as the slower model.
 
-**Limitation**: the generated deeds are clean digital PDFs. Real deeds are often scanned, skewed or handwritten in places, so accuracy on real documents will be lower than on this dataset.
+The same ten deeds also exist as **simulated scans** in `samples/dataset_scanned/`: rendered to grayscale images with slight rotation, blur, grain, uneven contrast and heavy JPEG compression, with no text layer. Comparing both sets shows how much scan quality costs.
+
+**Limitation**: real deeds also have stamps, signatures, handwriting and photocopy artefacts that the simulation does not reproduce, so accuracy on real documents will likely be lower still.
 
 ---
 
@@ -93,11 +110,15 @@ Latency is measured with `time.perf_counter()`. Both models run in parallel, so 
 ├── accuracy.py                     # Field-level scoring against ground truth
 ├── evaluate.py                     # Flash vs Pro on one document
 ├── benchmark.py                    # Accuracy over the labelled dataset
+├── export.py                       # Excel / CSV export
 ├── samples/
 │   ├── sample_deed.pdf / .json     # Fictional demo deed + its correct values
 │   ├── dataset/                    # 10 more fictional deeds, each with a .json
+│   ├── dataset_scanned/            # The same 10 as simulated scans
 │   └── make_sample_deed.py         # Script that generates them
 ├── tests/                          # pytest suite (no API key needed)
+├── scripts/screenshots.py          # Regenerates docs/screenshots/
+├── .github/workflows/ci.yml        # Lint, tests, frontend build, Docker build
 ├── frontend/                       # React + TypeScript + Tailwind (Vite)
 │   ├── src/
 │   │   ├── App.tsx                 # Layout, state, run logic
@@ -107,11 +128,12 @@ Latency is measured with `time.perf_counter()`. Both models run in parallel, so 
 │   └── nginx.conf                  # Serves the app, proxies /api to the backend
 ├── Dockerfile                      # Backend image
 ├── docker-compose.yml              # api + web services
+├── pyproject.toml                  # ruff and pytest settings
 ├── requirements.txt
-└── requirements-dev.txt            # + pytest
+└── requirements-dev.txt            # + pytest, ruff
 ```
 
-> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and the dataset with `python samples/make_sample_deed.py --dataset 10`.
+> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and both datasets with `python samples/make_sample_deed.py --dataset 10 --scanned`.
 
 ---
 
@@ -151,16 +173,18 @@ set GEMINI_API_KEY=your-key       # macOS/Linux: export GEMINI_API_KEY=your-key
 python extractor.py --pdf samples/sample_deed.pdf
 python evaluate.py  --pdf samples/sample_deed.pdf --truth samples/sample_deed.json
 python benchmark.py                # accuracy over samples/dataset, saved to benchmark_results.json
+python benchmark.py --dataset samples/dataset_scanned --output benchmark_scanned.json
 ```
 
-### Tests
+### Tests and linting
 
 ```bash
 pip install -r requirements-dev.txt
+ruff check .
 python -m pytest
 ```
 
-The tests mock Gemini, so they need no API key and make no network calls.
+The tests mock Gemini, so they need no API key and make no network calls. GitHub Actions runs the same checks on every push, plus the frontend type-check and build (`npm ci` from the lockfile) and the Docker image builds.
 
 ### Models
 
@@ -182,8 +206,10 @@ With Docker, add `environment: [GEMINI_MODELS=...]` to the `api` service in `doc
 | `GET` | `/api/sample` | The fictional sample deed (PDF) |
 | `POST` | `/api/extract` | Multipart: `file` or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. |
 | `POST` | `/api/evaluate` | Multipart: `file` or `use_sample=true`. Header `X-Gemini-Key`. For the sample, also scores accuracy against its known answers. |
+| `POST` | `/api/validate` | JSON deed (e.g. after manual corrections). Returns `{"issues": [...]}`. |
+| `POST` | `/api/export?format=xlsx\|csv` | JSON deed. Returns an Excel file (sheets *Deed* and *People*) or a CSV. |
 
-Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Every extraction response includes `_validation` (a list of failed checks, empty when all pass) and `_meta` (model, pages, seconds).
+Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Busy (429) and server (5xx) errors from Gemini are retried up to 3 times with backoff. Every extraction response includes `sources` (page and quote per value), `_validation` (failed checks, empty when all pass) and `_meta` (model, pages, seconds).
 
 ---
 
@@ -193,6 +219,8 @@ Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tok
 2. Paste it into **Settings** and pick a model (Flash: faster / Pro: more accurate)
 3. Keep the **Sample deed** selected, or switch to **Upload PDF** and drop in your own deed
 4. Click **Extract**
+5. Check flagged values: hover a page link (**p. 1**) to see the quote, click it to open that page in the preview
+6. Click **Edit values** to correct anything, then download **Excel** or **CSV**
 
 To benchmark both models, open the **Model evaluation** tab and click **Run evaluation**.
 
@@ -222,8 +250,9 @@ To benchmark both models, open the **Model evaluation** tab and click **Run eval
 
 ## Potential Improvements
 
-- **Real-document evaluation**: the labelled dataset is synthetic and clean; a set of scanned, anonymised real deeds would give a more honest accuracy figure
-- **Source references**: return the page and quoted text for each field and highlight it in the preview
+- **Real-document evaluation**: the labelled datasets are synthetic; a set of anonymised real deeds would give a more honest accuracy figure
+- **Highlight in the preview**: draw a box around the quoted text on the page instead of only jumping to the page
+- **Add or remove parties while editing**: editing currently changes existing values only
 - **Native PDF input**: Gemini accepts PDFs directly, which would remove the image conversion step
 - **Multi-document support**: different schemas and prompts per document type (lease, will, etc.)
 - **Async processing**: parallel page processing for large documents
