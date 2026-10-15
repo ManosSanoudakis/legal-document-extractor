@@ -23,6 +23,18 @@ logger = logging.getLogger(__name__)
 # so this is set well above the ~1-2k tokens the JSON itself needs.
 MAX_OUTPUT_TOKENS = 16_384
 
+# Gemini often answers 429 (busy) or 5xx under load; these usually succeed on
+# a retry. Up to 3 attempts with exponential backoff, each capped at 150 s.
+HTTP_OPTIONS = types.HttpOptions(
+    timeout=150_000,
+    retry_options=types.HttpRetryOptions(
+        attempts=3,
+        initial_delay=2.0,
+        max_delay=20.0,
+        http_status_codes=[429, 500, 502, 503, 504],
+    ),
+)
+
 # First model is the default. Override with a comma-separated GEMINI_MODELS
 # env var when Google retires or renames models.
 DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.1-pro-preview"]
@@ -45,6 +57,8 @@ PROMPT = """
 - Σε γονική παροχή ή δωρεά: πωλητής = γονέας / δωρητής, αγοραστής = τέκνο / δωρεοδόχος.
 - Η τιμή μπορεί να αναφέρεται ως "τίμημα" ή "αντάλλαγμα".
 - Μετάτρεψε την ημερομηνία υπογραφής σε μορφή YYYY-MM-DD.
+- Για κάθε πεδίο που συμπλήρωσες, πρόσθεσε στο sources τη σελίδα και το
+  ακριβές απόσπασμα του εγγράφου όπου εμφανίζεται η τιμή.
 """
 
 # ---------------------------------------------------------------------------
@@ -122,14 +136,18 @@ class GeminiExtractor(BaseExtractor):
     MODELS = MODELS
 
     def extract(self, image_paths: list[Path]) -> dict:
-        client = genai.Client(api_key=self.api_key)
+        client = genai.Client(api_key=self.api_key, http_options=HTTP_OPTIONS)
         images = [Image.open(p) for p in image_paths]
 
         try:
             t0 = time.perf_counter()
             response = client.models.generate_content(
                 model=self.model_name,
-                contents=[*images, PROMPT],
+                # Label each page so the model can cite page numbers in `sources`
+                contents=[
+                    *(part for i, img in enumerate(images, start=1) for part in (f"Σελίδα {i}:", img)),
+                    PROMPT,
+                ],
                 config=types.GenerateContentConfig(
                     max_output_tokens=MAX_OUTPUT_TOKENS,
                     response_mime_type="application/json",

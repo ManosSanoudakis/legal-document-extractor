@@ -12,10 +12,9 @@ name with or without the patronymic counts as the same name.
 from __future__ import annotations
 
 import re
-import unicodedata
 from datetime import date
 
-from validators import digits
+from validators import digits, norm_text
 
 SCALAR_FIELDS: dict[str, str] = {
     "notary.name": "text",
@@ -38,12 +37,6 @@ REP_FIELDS = {"full_name": "text", "represents": "text", "tax_id": "digits", "id
 
 # Greek capitals that look identical to Latin ones (ID numbers are often typed either way)
 _LOOKALIKES = str.maketrans("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", "ABEZHIKMNOPTYX")
-
-
-def _norm_text(value: object) -> str:
-    text = unicodedata.normalize("NFD", str(value))
-    text = "".join(c for c in text if not unicodedata.combining(c)).casefold()
-    return " ".join(re.sub(r"[^\w]+", " ", text).split())
 
 
 def _to_number(value: object) -> float | None:
@@ -98,7 +91,7 @@ def values_match(kind: str, expected: object, got: object) -> bool:
             return da == db
         # fall through to text comparison for e.g. "ισόγειο"
 
-    a, b = _norm_text(expected), _norm_text(got)
+    a, b = norm_text(expected), norm_text(got)
     if a == b:
         return True
     shorter, longer = sorted((a, b), key=len)

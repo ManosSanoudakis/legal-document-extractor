@@ -57,6 +57,7 @@ export default function App() {
   const [model, setModel] = useState("");
   const [doc, setDoc] = useState<DocumentChoice | null>(null);
   const [view, setView] = useState<View>("extract");
+  const [previewPage, setPreviewPage] = useState<number | null>(null);
   const extraction = useTask<ExtractionResult>();
   const evaluation = useTask<EvaluationReport>();
 
@@ -70,8 +71,15 @@ export default function App() {
       .catch((err: Error) => setConfigError(err.message));
   }, []);
 
+  /** Jump the PDF preview to a page and bring it into view. */
+  function showPage(page: number) {
+    setPreviewPage(page);
+    document.getElementById("document-preview")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   function changeDocument(next: DocumentChoice | null) {
     setDoc(next);
+    setPreviewPage(null);
     extraction.reset();
     evaluation.reset();
   }
@@ -108,7 +116,7 @@ export default function App() {
                 model={model}
                 onModelChange={setModel}
               />
-              <DocumentCard config={config} document={doc} onChange={changeDocument} />
+              <DocumentCard config={config} document={doc} onChange={changeDocument} page={previewPage} />
             </div>
 
             <Card className="lg:col-span-7">
@@ -135,7 +143,7 @@ export default function App() {
                     missing={missing}
                     task={extraction.task}
                     onRun={() => doc && extraction.run(() => extract(doc, model, apiKey.trim()))}
-                    render={(data) => <ResultsView result={data} />}
+                    render={(data) => <ResultsView result={data} onShowPage={showPage} />}
                   />
                 ) : (
                   <RunPanel

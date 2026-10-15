@@ -1,0 +1,44 @@
+{
+  "notary": {
+    "name": "Ευαγγελία Πλασματικός",
+    "location": "Πάτρα",
+    "registry_number": "27.066"
+  },
+  "sellers": [
+    {
+      "full_name": "Γεωργία Πλασματική του Χρήστου",
+      "tax_id": "104319554",
+      "id_document": "ΑΙ 042624",
+      "address": "Οδός Πλασματικής 5, Πάτρα"
+    }
+  ],
+  "buyers": [
+    {
+      "full_name": "Ευαγγελία Εικονική του Ιωάννη",
+      "tax_id": "031776467",
+      "id_document": "ΑΕ 003954",
+      "address": "Οδός Υποθέσεων 118, Ηράκλειο"
+    },
+    {
+      "full_name": "Νικόλαος Υποθετικός του Δημητρίου",
+      "tax_id": "557591836",
+      "id_document": "ΑΕ 862721",
+      "address": "Οδός Φανταστικής 78, Πειραιάς"
+    }
+  ],
+  "legal_representatives": [],
+  "property": {
+    "type": "μονοκατοικία",
+    "address": "Οδός Φανταστικής 55, Πάτρα",
+    "municipal_unit": "Δημοτική Ενότητα Ρίου",
+    "floor": null,
+    "area_sqm": 141.91,
+    "kaek": "994913167723/0/2",
+    "building_permit": "6929/2004 του Πολεοδομικού Γραφείου Δοκιμών"
+  },
+  "transaction": {
+    "deed_type": "parental_provision",
+    "price": null,
+    "date": "2025-01-16"
+  }
+}

@@ -33,24 +33,32 @@ class FakeClient:
 
 def run_extract(monkeypatch, page_images, response):
     client = FakeClient(response)
-    monkeypatch.setattr(extractor.genai, "Client", lambda api_key: client)
+    monkeypatch.setattr(extractor.genai, "Client", lambda api_key, **kwargs: client)
     result = extractor.GeminiExtractor("key", "gemini-test").extract(page_images)
     return result, client
 
 
 def test_requests_structured_output(monkeypatch, page_images, sample_truth):
-    response = SimpleNamespace(parsed=Deed.model_validate(sample_truth), text=None)
+    response = SimpleNamespace(parsed=Deed.model_validate({**sample_truth, "sources": []}), text=None)
     result, client = run_extract(monkeypatch, page_images, response)
 
     [call] = client.calls
     assert call["model"] == "gemini-test"
     assert call["config"].response_schema is Deed
     assert call["config"].response_mime_type == "application/json"
-    assert len(call["contents"]) == 3  # two pages + prompt
+    # each page is preceded by its label, then the prompt
+    assert call["contents"][0] == "Σελίδα 1:" and call["contents"][2] == "Σελίδα 2:"
+    assert len(call["contents"]) == 5
 
     assert result["transaction"]["deed_type"] == "sale"
     assert result["_meta"]["pages"] == 2
     assert any(i["field"].endswith("tax_id") for i in result["_validation"])  # sample ΑΦΜ are invalid
+
+
+def test_client_retries_busy_and_server_errors():
+    retry = extractor.HTTP_OPTIONS.retry_options
+    assert retry.attempts == 3
+    assert {429, 503} <= set(retry.http_status_codes)
 
 
 def test_falls_back_to_text_when_parsed_missing(monkeypatch, page_images, sample_truth):

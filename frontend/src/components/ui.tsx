@@ -197,29 +197,22 @@ export function Tabs<T extends string>({
 const EMPTY = "Not found";
 
 /** Label/value pairs in a responsive grid. Empty values show a muted placeholder. */
-export function FieldGrid({ fields }: { fields: [label: string, value: unknown][] }) {
+export function FieldGrid({ fields }: { fields: [label: string, value: ReactNode][] }) {
   return (
     <dl className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-      {fields.map(([label, value]) => {
-        const v = text(value);
-        return (
-          <div key={label} className="min-w-0">
-            <dt className="text-xs text-ink-500 dark:text-stone-400">
-              {label}
-            </dt>
-            <dd
-              className={cx(
-                "mt-1 break-words text-sm font-medium text-ink-900 dark:text-stone-100",
-                !v && "font-normal italic text-ink-400 dark:text-stone-500",
-              )}
-            >
-              {v || EMPTY}
-            </dd>
-          </div>
-        );
-      })}
+      {fields.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-xs text-ink-500 dark:text-stone-400">{label}</dt>
+          <dd className="mt-1 break-words text-sm font-medium text-ink-900 dark:text-stone-100">{value}</dd>
+        </div>
+      ))}
     </dl>
   );
+}
+
+/** Placeholder for a value the model did not find. */
+export function Empty() {
+  return <span className="font-normal italic text-ink-400 dark:text-stone-500">{EMPTY}</span>;
 }
 
 type Tone = "blue" | "emerald" | "violet" | "amber";
@@ -277,7 +270,7 @@ export function Table<Row>({
   rows,
   empty,
 }: {
-  columns: { header: string; cell: (row: Row) => ReactNode; className?: string }[];
+  columns: { header: string; cell: (row: Row, index: number) => ReactNode; className?: string }[];
   rows: Row[];
   empty: string;
 }) {
@@ -299,7 +292,7 @@ export function Table<Row>({
             <tr key={i}>
               {columns.map((c) => (
                 <td key={c.header} className={cx("px-4 py-3 align-top", c.className)}>
-                  {c.cell(row)}
+                  {c.cell(row, i)}
                 </td>
               ))}
             </tr>

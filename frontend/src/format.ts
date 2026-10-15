@@ -24,7 +24,7 @@ export function downloadJson(data: unknown, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-const DEED_TYPES: Record<string, string> = {
+export const DEED_TYPES: Record<string, string> = {
   sale: "Sale",
   parental_provision: "Parental provision",
   donation: "Donation",

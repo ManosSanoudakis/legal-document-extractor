@@ -10,6 +10,7 @@ makes field-level accuracy measurable (see accuracy.py and benchmark.py).
 Usage:
     python samples/make_sample_deed.py               # samples/sample_deed.pdf + .json
     python samples/make_sample_deed.py --dataset 10  # also samples/dataset/deed_01..10
+    python samples/make_sample_deed.py --dataset 10 --scanned  # + scan-like copies
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from datetime import date
 from pathlib import Path
 
 import fitz
+from PIL import Image, ImageEnhance, ImageFilter
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent))
@@ -69,11 +71,15 @@ class DeedSpec:
 
     def truth(self) -> dict:
         """The values a perfect extraction would return."""
-        party = lambda p: {"full_name": p.name, "tax_id": p.afm, "id_document": p.id_doc, "address": p.address}
+        def party(p: Person) -> dict:
+            return {"full_name": p.name, "tax_id": p.afm, "id_document": p.id_doc, "address": p.address}
+
         reps = []
         if self.representative:
             r = self.representative
-            reps.append({"full_name": r.name, "represents": self.represents.name, "tax_id": r.afm, "id_document": r.id_doc})
+            reps.append(
+                {"full_name": r.name, "represents": self.represents.name, "tax_id": r.afm, "id_document": r.id_doc}
+            )
         return {
             "notary": {"name": self.notary, "location": self.location, "registry_number": self.registry_number},
             "sellers": [party(p) for p in self.sellers],
@@ -318,9 +324,36 @@ def render(spec: DeedSpec, pdf_path: Path) -> None:
     print(f"Wrote {pdf_path.relative_to(ROOT.parent)} (+ .json)")
 
 
+def scan(src: Path, dest: Path, rng: random.Random) -> None:
+    """Turn a clean PDF into an image-only one that looks like a cheap office scan."""
+    pages = []
+    with fitz.open(src) as doc:
+        for page in doc:
+            pix = page.get_pixmap(dpi=130, colorspace=fitz.csGRAY)
+            img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+            img = img.rotate(rng.uniform(-1.8, 1.8), resample=Image.BICUBIC, expand=True, fillcolor=255)
+            img = img.filter(ImageFilter.GaussianBlur(rng.uniform(0.4, 0.9)))
+            grain = Image.effect_noise(img.size, rng.uniform(10, 22))
+            img = Image.blend(img, grain, 0.12)
+            img = ImageEnhance.Contrast(img).enhance(rng.uniform(0.75, 1.0))
+            img = ImageEnhance.Brightness(img).enhance(rng.uniform(0.92, 1.05))
+            buffer = io.BytesIO()
+            img.save(buffer, "JPEG", quality=rng.randint(40, 60))
+            pages.append((page.rect, buffer.getvalue()))
+
+    with fitz.open() as out:
+        for rect, jpeg in pages:
+            out.new_page(width=rect.width, height=rect.height).insert_image(rect, stream=jpeg)
+        out.save(dest, garbage=4, deflate=True)
+    dest.with_suffix(".json").write_text(src.with_suffix(".json").read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"Wrote {dest.relative_to(ROOT.parent)} (+ .json)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dataset", type=int, default=0, help="Also generate N random deeds in samples/dataset/")
+    parser.add_argument("--scanned", action="store_true",
+                        help="Also write scan-like, image-only copies to samples/dataset_scanned/")
     parser.add_argument("--seed", type=int, default=7, help="Random seed, so the dataset is reproducible")
     args = parser.parse_args()
 
@@ -331,6 +364,13 @@ def main() -> None:
         rng = random.Random(args.seed)
         for i in range(1, args.dataset + 1):
             render(random_deed(rng), out / f"deed_{i:02d}.pdf")
+
+        if args.scanned:
+            scanned = ROOT / "dataset_scanned"
+            scanned.mkdir(exist_ok=True)
+            rng = random.Random(args.seed)
+            for i in range(1, args.dataset + 1):
+                scan(out / f"deed_{i:02d}.pdf", scanned / f"deed_{i:02d}.pdf", rng)
 
 
 if __name__ == "__main__":

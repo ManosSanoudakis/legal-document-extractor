@@ -9,13 +9,40 @@ never silently fixed, so a person can verify it against the PDF.
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import date
 
 KAEK_PATTERN = re.compile(r"^\d{12}(/\d+/\d+)?$")
+PATH_PATTERN = re.compile(r"^(\w+)(?:\[(\d+)\])?\.(\w+)$")
+
+# Fields whose value is copied from the document as written, so it should
+# appear in the quoted source. Numbers, dates and deed type are converted.
+DIGIT_FIELDS = {"tax_id", "kaek", "registry_number"}
+COPIED_FIELDS = DIGIT_FIELDS | {"full_name", "id_document", "address", "name", "location", "municipal_unit"}
 
 
 def digits(value: object) -> str:
     return re.sub(r"\D", "", str(value))
+
+
+def norm_text(value: object) -> str:
+    """Lowercase, strip accents and punctuation, collapse spaces."""
+    text = unicodedata.normalize("NFD", str(value))
+    text = "".join(c for c in text if not unicodedata.combining(c)).casefold()
+    return " ".join(re.sub(r"[^\w]+", " ", text).split())
+
+
+def get_path(data: dict, path: str) -> object:
+    """Read a value by path: "property.kaek" or "sellers[0].tax_id". Missing → None."""
+    m = PATH_PATTERN.match(path)
+    if not m:
+        return None
+    section, index, key = m.groups()
+    node = data.get(section)
+    if index is not None:
+        items = node or []
+        node = items[int(index)] if int(index) < len(items) else None
+    return node.get(key) if isinstance(node, dict) else None
 
 
 def afm_is_valid(afm: str) -> bool:
@@ -76,6 +103,24 @@ def _check_positive(field: str, value: object, upper: float) -> list[dict]:
     return []
 
 
+def _check_sources(data: dict) -> list[dict]:
+    """Flag copied values that do not appear in the text the model quoted for them."""
+    issues = []
+    for source in data.get("sources") or []:
+        path, quote = source.get("field") or "", source.get("quote")
+        key = path.rsplit(".", 1)[-1]
+        value = get_path(data, path)
+        if key not in COPIED_FIELDS or value is None or not quote:
+            continue
+        if key in DIGIT_FIELDS:
+            found = digits(value) != "" and digits(value) in digits(quote)
+        else:
+            found = norm_text(value) in norm_text(quote)
+        if not found:
+            issues.append(_issue(path, value, "Value does not appear in the quoted source text."))
+    return issues
+
+
 def validate_deed(data: dict, today: date | None = None) -> list[dict]:
     """Return a list of issues found in an extracted deed. Empty means all checks passed."""
     today = today or date.today()
@@ -107,4 +152,5 @@ def validate_deed(data: dict, today: date | None = None) -> list[dict]:
         if p.get("tax_id") and digits(p["tax_id"]) in seller_ids:
             issues.append(_issue(f"buyers[{i}].tax_id", p["tax_id"], "Same ΑΦΜ appears as a seller.", "error"))
 
+    issues += _check_sources(data)
     return issues

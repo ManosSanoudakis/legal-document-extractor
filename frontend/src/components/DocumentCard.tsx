@@ -9,10 +9,12 @@ export function DocumentCard({
   config,
   document,
   onChange,
+  page,
 }: {
   config: AppConfig;
   document: DocumentChoice | null;
   onChange: (doc: DocumentChoice | null) => void;
+  page?: number | null;
 }) {
   const [source, setSource] = useState<Source>(
     document?.kind ?? (config.sample_available ? "sample" : "upload"),
@@ -65,7 +67,7 @@ export function DocumentCard({
         )}
         {error && <Alert tone="error">{error}</Alert>}
 
-        {document && <Preview document={document} />}
+        {document && <Preview document={document} page={page ?? null} />}
       </div>
     </Card>
   );
@@ -139,7 +141,7 @@ function Dropzone({
   );
 }
 
-function Preview({ document }: { document: DocumentChoice }) {
+function Preview({ document, page }: { document: DocumentChoice; page: number | null }) {
   const objectUrl = useMemo(
     () => (document.kind === "upload" ? URL.createObjectURL(document.file) : null),
     [document],
@@ -151,7 +153,13 @@ function Preview({ document }: { document: DocumentChoice }) {
   const src = objectUrl ?? SAMPLE_URL;
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
-      <iframe title="Document preview" src={`${src}#view=FitH`} className="h-[520px] w-full bg-stone-100 lg:h-[640px]" />
+      {/* key forces a reload so the browser PDF viewer jumps to the new page */}
+      <iframe
+        id="document-preview"
+        key={page ?? 0}
+        title="Document preview"
+        src={`${src}#${page ? `page=${page}&` : ""}view=FitH`}
+        className="h-[520px] w-full bg-stone-100 lg:h-[640px]" />
     </div>
   );
 }
