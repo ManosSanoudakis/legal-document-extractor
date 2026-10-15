@@ -1,4 +1,4 @@
-// Mirrors the JSON returned by the FastAPI backend (see extractor.SCHEMA).
+// Mirrors the JSON returned by the FastAPI backend (see schema.py).
 
 export interface Party {
   full_name?: string | null;
@@ -30,7 +30,24 @@ export interface ExtractionResult {
   } | null;
   transaction?: { deed_type?: string | null; price?: number | string | null; date?: string | null } | null;
   _meta?: { model: string; provider: string; pages: number; elapsed_seconds: number };
+  _validation?: ValidationIssue[];
   _error?: string;
+}
+
+/** A sanity check that failed (see validators.py). */
+export interface ValidationIssue {
+  field: string;
+  value: unknown;
+  message: string;
+  severity: "error" | "warning";
+}
+
+export interface Accuracy {
+  accuracy_pct: number;
+  correct: number;
+  total: number;
+  extra_parties: number;
+  mismatches: { field: string; expected: unknown; got: unknown }[];
 }
 
 export interface Completeness {
@@ -45,6 +62,8 @@ export interface ModelRun {
   model: string;
   elapsed_s: number;
   completeness: Completeness | Record<string, never>;
+  accuracy?: Accuracy | null;
+  checks_failed?: number;
   error: string | null;
 }
 
@@ -52,7 +71,7 @@ export interface EvaluationReport {
   pdf: string;
   models: ModelRun[];
   field_diffs?: { field: string; model_a: unknown; model_b: unknown }[];
-  winner?: { accuracy: string; speed: string };
+  winner?: { accuracy: string; basis?: "accuracy" | "completeness"; speed: string };
   raw_results: Record<string, ExtractionResult>;
 }
 

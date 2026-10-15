@@ -8,7 +8,10 @@ A full-stack application that extracts structured data from Greek notarial deeds
 
 The pipeline converts a PDF into page images, sends them to a Vision Language Model (VLM), and returns a structured JSON object with all key information from the deed — parties, property details, transaction data, and notary information.
 
-An evaluation module benchmarks **Gemini 2.5 Flash** against **Gemini 2.5 Pro** on the same document, measuring extraction completeness and latency.
+- **Schema-enforced output**: Gemini's structured output mode constrains the response to a Pydantic schema, so every response has the same shape.
+- **Automatic checks**: every extraction is validated (ΑΦΜ check digits, ΚΑΕΚ format, impossible dates, non-positive amounts) and problems are shown next to the results.
+- **Measured accuracy**: a labelled set of fictional deeds gives field-level accuracy, not just a count of filled-in fields.
+- **Model comparison**: Gemini Flash and Pro run side by side on the same document, scored on accuracy, completeness and latency.
 
 ---
 
@@ -18,9 +21,11 @@ An evaluation module benchmarks **Gemini 2.5 Flash** against **Gemini 2.5 Pro** 
 PDF
  └── pdf_to_images()        # PyMuPDF → JPEG pages (temporary, deleted after use)
       └── BaseExtractor
-           └── GeminiExtractor.extract()   # PIL images + prompt → JSON
+           └── GeminiExtractor.extract()   # images + prompt → JSON constrained by schema.Deed
+                ├── validate_deed()        # ΑΦΜ, ΚΑΕΚ, date and amount checks → _validation
                 └── run_pipeline()         # public entry point
-                     ├── evaluate.py       # Flash vs Pro benchmark
+                     ├── evaluate.py       # Flash vs Pro on one document (+ accuracy if truth known)
+                     ├── benchmark.py      # accuracy over the labelled dataset
                      └── api.py            # FastAPI REST endpoints
                           └── frontend/    # React UI (served by nginx, proxies /api)
 ```
@@ -43,6 +48,12 @@ Google AI Studio provides free-tier access to both Flash and Pro models, making 
 ### Why `BaseExtractor` as an ABC?
 Enforces a consistent interface across providers. Any new backend must implement `extract()` — the rest of the pipeline doesn't need to change.
 
+### Why structured output instead of "return only JSON" in the prompt?
+Asking for JSON in the prompt works most of the time, but the model can still wrap it in markdown, rename a key or drop a field. With `response_schema`, Gemini is constrained to the Pydantic models in `schema.py`: every key is present, `deed_type` is one of four values, and numbers are numbers. Field descriptions in the schema double as per-field instructions. The old JSON parser stays as a fallback.
+
+### Why validate the output?
+A vision model can misread one digit of a tax ID and still sound confident. Some errors can be caught without the source document: the Greek ΑΦΜ has a check digit, a ΚΑΕΚ has 12 digits, a deed cannot be signed in the future, and a price must be positive. Problems are reported, never silently corrected, so a person can verify them against the PDF.
+
 ### Why `area_sqm` and `price` as numbers, not strings?
 To support downstream calculations (e.g. price per sqm) without extra parsing. A string would require conversion every time.
 
@@ -59,7 +70,15 @@ Separating the API from the UI means the extraction service can be used by any c
 No key is stored on the server. The browser keeps the key in memory and sends it per request in the `X-Gemini-Key` header, so nobody can spend someone else's quota.
 
 ### Evaluation methodology
-Without a ground-truth annotated dataset, exact accuracy cannot be measured. Instead, we use **completeness** (percentage of non-null fields) as a proxy, and **field-level disagreement** between models as a consistency signal. Latency is measured with `time.perf_counter()` for precision.
+Real deeds cannot be shared, so `samples/make_sample_deed.py` generates fictional deeds together with a JSON file of the correct values. That makes three measurements possible:
+
+- **Accuracy**: every field in the ground truth is compared with the extraction, including fields that should be null, so an invented value counts as wrong. Comparison ignores formatting only (accents, case, spacing, Latin look-alike letters in ID numbers, a name with or without the patronymic).
+- **Completeness**: the share of fields that are filled in. Used when no ground truth exists (any uploaded PDF). It rewards invented values, so it is a weak proxy.
+- **Disagreement**: fields where the two models return different values, a consistency signal that needs no ground truth.
+
+Latency is measured with `time.perf_counter()`. Both models run in parallel, so an evaluation takes as long as the slower model.
+
+**Limitation**: the generated deeds are clean digital PDFs. Real deeds are often scanned, skewed or handwritten in places, so accuracy on real documents will be lower than on this dataset.
 
 ---
 
@@ -69,10 +88,16 @@ Without a ground-truth annotated dataset, exact accuracy cannot be measured. Ins
 .
 ├── api.py                          # FastAPI REST API
 ├── extractor.py                    # PDF → images → VLM → JSON
-├── evaluate.py                     # Flash vs Pro benchmark
+├── schema.py                       # Pydantic output schema sent to Gemini
+├── validators.py                   # ΑΦΜ, ΚΑΕΚ, date and amount checks
+├── accuracy.py                     # Field-level scoring against ground truth
+├── evaluate.py                     # Flash vs Pro on one document
+├── benchmark.py                    # Accuracy over the labelled dataset
 ├── samples/
-│   ├── sample_deed.pdf             # Fictional demo deed
-│   └── make_sample_deed.py         # Script that generates it
+│   ├── sample_deed.pdf / .json     # Fictional demo deed + its correct values
+│   ├── dataset/                    # 10 more fictional deeds, each with a .json
+│   └── make_sample_deed.py         # Script that generates them
+├── tests/                          # pytest suite (no API key needed)
 ├── frontend/                       # React + TypeScript + Tailwind (Vite)
 │   ├── src/
 │   │   ├── App.tsx                 # Layout, state, run logic
@@ -82,10 +107,11 @@ Without a ground-truth annotated dataset, exact accuracy cannot be measured. Ins
 │   └── nginx.conf                  # Serves the app, proxies /api to the backend
 ├── Dockerfile                      # Backend image
 ├── docker-compose.yml              # api + web services
-└── requirements.txt
+├── requirements.txt
+└── requirements-dev.txt            # + pytest
 ```
 
-> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person. Regenerate it with `python samples/make_sample_deed.py`.
+> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and the dataset with `python samples/make_sample_deed.py --dataset 10`.
 
 ---
 
@@ -123,8 +149,28 @@ Open [http://localhost:5173](http://localhost:5173). Interactive API docs are at
 ```bash
 set GEMINI_API_KEY=your-key       # macOS/Linux: export GEMINI_API_KEY=your-key
 python extractor.py --pdf samples/sample_deed.pdf
-python evaluate.py  --pdf samples/sample_deed.pdf
+python evaluate.py  --pdf samples/sample_deed.pdf --truth samples/sample_deed.json
+python benchmark.py                # accuracy over samples/dataset, saved to benchmark_results.json
 ```
+
+### Tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The tests mock Gemini, so they need no API key and make no network calls.
+
+### Models
+
+The defaults are `gemini-3.8-flash` (fast) and `gemini-3.1-pro-preview` (more accurate). Google retires and renames models regularly; override the list without code changes:
+
+```bash
+set GEMINI_MODELS=gemini-3.8-flash,gemini-3.1-pro-preview   # first one is the default
+```
+
+With Docker, add `environment: [GEMINI_MODELS=...]` to the `api` service in `docker-compose.yml`.
 
 ---
 
@@ -135,9 +181,9 @@ python evaluate.py  --pdf samples/sample_deed.pdf
 | `GET` | `/api/config` | Available models, limits, whether the sample exists |
 | `GET` | `/api/sample` | The fictional sample deed (PDF) |
 | `POST` | `/api/extract` | Multipart: `file` or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. |
-| `POST` | `/api/evaluate` | Multipart: `file` or `use_sample=true`. Header `X-Gemini-Key`. |
+| `POST` | `/api/evaluate` | Multipart: `file` or `use_sample=true`. Header `X-Gemini-Key`. For the sample, also scores accuracy against its known answers. |
 
-Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens.
+Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Every extraction response includes `_validation` (a list of failed checks, empty when all pass) and `_meta` (model, pages, seconds).
 
 ---
 
@@ -161,7 +207,7 @@ To benchmark both models, open the **Model evaluation** tab and click **Run eval
 | Buyers | full name, tax ID, ID document, address |
 | Legal Representatives | full name, represents, tax ID, ID document |
 | Property | type, address, municipal unit, floor, area (sqm), KAEK, building permit |
-| Transaction | deed type, price, date |
+| Transaction | deed type (`sale`, `parental_provision`, `donation`, `other`), price, date (YYYY-MM-DD) |
 
 ---
 
@@ -176,7 +222,9 @@ To benchmark both models, open the **Model evaluation** tab and click **Run eval
 
 ## Potential Improvements
 
-- **Ground-truth evaluation**: human-annotated dataset for exact accuracy measurement
+- **Real-document evaluation**: the labelled dataset is synthetic and clean; a set of scanned, anonymised real deeds would give a more honest accuracy figure
+- **Source references**: return the page and quoted text for each field and highlight it in the preview
+- **Native PDF input**: Gemini accepts PDFs directly, which would remove the image conversion step
 - **Multi-document support**: different schemas and prompts per document type (lease, will, etc.)
 - **Async processing**: parallel page processing for large documents
 - **Authentication & usage limits**: needed before hosting the app publicly (see `TODO: SECURITY` in `api.py`)

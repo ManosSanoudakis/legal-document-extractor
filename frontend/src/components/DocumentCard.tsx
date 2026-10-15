@@ -57,7 +57,8 @@ export function DocumentCard({
         {source === "sample" ? (
           <p className="text-sm text-ink-600 dark:text-stone-400">
             A <strong className="font-semibold text-ink-800 dark:text-stone-200">fictional</strong> Greek sale
-            deed. Every name, number and address is invented.
+            deed. Every name, number and address is invented, and its tax IDs are deliberately invalid, so the
+            automatic checks will flag them.
           </p>
         ) : (
           <Dropzone file={file} config={config} onFile={acceptFile} />
