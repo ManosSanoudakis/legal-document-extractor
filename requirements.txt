@@ -1,4 +1,6 @@
-streamlit==1.58.0
+fastapi==0.143.0
+uvicorn==0.54.0
+python-multipart==0.0.32
 google-genai==2.7.0
 pymupdf==1.27.2.3
 Pillow==12.2.0

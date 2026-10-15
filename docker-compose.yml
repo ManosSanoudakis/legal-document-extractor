@@ -1,10 +1,12 @@
 services:
-  app:
+  api:
     build: .
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
     ports:
-      - "8501:8501"
-    volumes:
-      - ./pages:/app/pages
-    environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - "8080:80"
+    depends_on:
+      - api
     restart: unless-stopped
