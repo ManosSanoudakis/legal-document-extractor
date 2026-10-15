@@ -141,8 +141,8 @@ export default function App() {
                   <RunPanel
                     intro={
                       <>
-                        Run <strong>{config.models.join(" and ")}</strong> on the same document and compare how
-                        many fields each one filled in and how long it took.
+                        Run <strong>{config.models.join(" and ")}</strong> on the same document and compare their
+                        accuracy, completeness and speed.
                       </>
                     }
                     label="Run evaluation"

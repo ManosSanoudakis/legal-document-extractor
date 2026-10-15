@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { area, downloadJson, price, text } from "../format";
-import type { ExtractionResult, Party, Representative } from "../types";
+import { area, deedType, downloadJson, fieldLabel, price, text } from "../format";
+import type { ExtractionResult, Party, Representative, ValidationIssue } from "../types";
 import { Alert, Button, Cell, FieldGrid, Icon, SectionTitle, Stat, Table, Tabs } from "./ui";
 
 type Tab = "parties" | "property" | "notary" | "json";
@@ -38,11 +38,12 @@ export function ResultsView({ result }: { result: ExtractionResult }) {
       )}
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Stat label="Deed type" value={text(txn.deed_type)} icon="doc" tone="blue" />
+        <Stat label="Deed type" value={deedType(txn.deed_type)} icon="doc" tone="blue" />
         <Stat label="Price" value={price(txn.price)} icon="chart" tone="emerald" />
         <Stat label="Date" value={text(txn.date)} icon="file" tone="violet" />
         <Stat label="Area" value={area(prop.area_sqm)} icon="scale" tone="amber" />
       </div>
+      <Checks issues={result._validation} />
       {meta && (
         <p className="text-xs text-ink-500 dark:text-stone-400">
           {meta.model} · {meta.pages} page{meta.pages === 1 ? "" : "s"} · {meta.elapsed_seconds} s
@@ -143,5 +144,32 @@ export function JsonPanel({ data, filename }: { data: unknown; filename: string 
         {json}
       </pre>
     </div>
+  );
+}
+
+/** Results of the automatic sanity checks run on the extracted data. */
+function Checks({ issues }: { issues: ValidationIssue[] | undefined }) {
+  if (!issues) return null;
+  if (issues.length === 0) {
+    return <Alert tone="info">All automatic checks passed: tax IDs, ΚΑΕΚ format, date and amounts.</Alert>;
+  }
+  const hasErrors = issues.some((i) => i.severity === "error");
+  return (
+    <Alert tone={hasErrors ? "error" : "warning"}>
+      <p className="font-semibold">
+        {issues.length} {issues.length === 1 ? "value needs" : "values need"} checking against the document
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {issues.map((issue, i) => (
+          <li key={i}>
+            <span className="font-medium">{fieldLabel(issue.field)}</span>
+            {issue.value !== null && issue.value !== undefined && (
+              <span className="font-mono text-xs"> {text(issue.value)}</span>
+            )}
+            : {issue.message}
+          </li>
+        ))}
+      </ul>
+    </Alert>
   );
 }

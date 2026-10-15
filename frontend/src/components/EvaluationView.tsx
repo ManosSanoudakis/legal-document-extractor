@@ -1,4 +1,4 @@
-import { text } from "../format";
+import { fieldLabel, text } from "../format";
 import type { Completeness, EvaluationReport, ModelRun } from "../types";
 import { JsonPanel } from "./ResultsView";
 import { Alert, Badge, Cell, SectionTitle, Stat, Table } from "./ui";
@@ -23,20 +23,27 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
   const runs = report.models;
   const byName = Object.fromEntries(runs.map((r) => [r.model, r]));
   const winner = report.winner;
+  const scored = runs.some((r) => r.accuracy);
   const [a, b] = runs;
+
+  const best = winner && byName[winner.accuracy];
+  const bestSub =
+    best && winner.basis === "accuracy" && best.accuracy
+      ? `${best.accuracy.accuracy_pct}% of fields correct`
+      : best
+        ? `${completeness(best).overall_pct}% of fields filled`
+        : undefined;
 
   return (
     <div className="space-y-6">
       {winner && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Stat
-            label="Most complete"
-            icon="award"
-            tone="emerald"
+            label={winner.basis === "accuracy" ? "Most accurate" : "Most complete"}
             value={winner.accuracy}
-            sub={`${completeness(byName[winner.accuracy]).overall_pct}% of fields filled`}
+            sub={bestSub}
           />
-          <Stat label="Fastest" icon="bolt" tone="amber" value={winner.speed} sub={`${byName[winner.speed].elapsed_s.toFixed(1)} s`} />
+          <Stat label="Fastest" value={winner.speed} sub={`${byName[winner.speed].elapsed_s.toFixed(1)} s`} />
         </div>
       )}
 
@@ -47,9 +54,9 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
           empty="No results."
           columns={[
             { header: "Model", cell: (r) => r.model, className: "font-medium whitespace-nowrap" },
-            { header: "Overall", cell: (r) => <Bar pct={completeness(r).overall_pct} /> },
-            { header: "Single fields", cell: (r) => <Bar pct={completeness(r).scalar_pct} /> },
-            { header: "Party fields", cell: (r) => <Bar pct={completeness(r).list_pct} /> },
+            ...(scored ? [{ header: "Accuracy", cell: (r: ModelRun) => <Bar pct={r.accuracy?.accuracy_pct} /> }] : []),
+            { header: "Completeness", cell: (r) => <Bar pct={completeness(r).overall_pct} /> },
+            { header: "Checks failed", cell: (r) => (r.error ? <Cell value={null} /> : (r.checks_failed ?? 0)), className: "tabular-nums" },
             { header: "Time", cell: (r) => `${r.elapsed_s.toFixed(2)} s`, className: "tabular-nums whitespace-nowrap" },
             {
               header: "Status",
@@ -58,10 +65,35 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
           ]}
         />
         <p className="mt-2 text-xs text-ink-500 dark:text-stone-400">
-          Completeness is the share of schema fields a model filled in. It is a proxy for accuracy, since there
-          is no ground truth to compare against.
+          {scored
+            ? "Accuracy compares every field with the known correct answers for the sample deed, so an invented value counts as wrong. Completeness only counts fields that are filled in."
+            : "This document has no known correct answers, so only completeness is shown: the share of fields a model filled in, right or wrong. Evaluate the sample deed to measure accuracy."}
         </p>
       </div>
+
+      {scored && (
+        <div>
+          <SectionTitle>Wrong or missing values</SectionTitle>
+          <div className="space-y-4">
+            {runs
+              .filter((r) => r.accuracy)
+              .map((r) => (
+                <div key={r.model}>
+                  <p className="mb-1.5 text-sm font-medium">{r.model}</p>
+                  <Table
+                    rows={r.accuracy!.mismatches}
+                    empty="Every field matches the correct answer."
+                    columns={[
+                      { header: "Field", cell: (m) => fieldLabel(m.field), className: "whitespace-nowrap" },
+                      { header: "Correct", cell: (m) => <Cell value={m.expected} /> },
+                      { header: "Extracted", cell: (m) => <Cell value={m.got} /> },
+                    ]}
+                  />
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <SectionTitle>Fields where the models disagree</SectionTitle>
@@ -74,7 +106,7 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
             rows={report.field_diffs}
             empty=""
             columns={[
-              { header: "Field", cell: (d) => d.field, className: "font-mono text-xs whitespace-nowrap" },
+              { header: "Field", cell: (d) => fieldLabel(d.field), className: "whitespace-nowrap" },
               { header: a?.model ?? "Model A", cell: (d) => text(d.model_a) },
               { header: b?.model ?? "Model B", cell: (d) => text(d.model_b) },
             ]}

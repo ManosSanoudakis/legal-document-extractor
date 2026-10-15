@@ -6,6 +6,7 @@
 # cap (extractor.MAX_OUTPUT_TOKENS) are in place.
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -28,6 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 SAMPLE_PDF = Path(__file__).parent / "samples" / "sample_deed.pdf"
+SAMPLE_TRUTH = SAMPLE_PDF.with_suffix(".json")  # correct answers for the sample
 MAX_FILE_MB = 20
 MAX_PAGES = 30
 
@@ -160,7 +162,11 @@ def evaluate(
 
     logger.info("Evaluation started — sample=%s", use_sample)
     with pdf_on_disk(data) as path:
-        report = run_evaluation(pdf_path=path, api_key=api_key)
+        # The sample has known answers, so its evaluation can measure real accuracy
+        truth = None
+        if use_sample and SAMPLE_TRUTH.exists():
+            truth = json.loads(SAMPLE_TRUTH.read_text(encoding="utf-8"))
+        report = run_evaluation(pdf_path=path, api_key=api_key, truth=truth)
     report["pdf"] = "sample_deed.pdf" if use_sample else (file.filename or "upload.pdf")
 
     # Per-model failures are caught inside run_evaluation; if every model

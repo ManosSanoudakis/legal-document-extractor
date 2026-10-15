@@ -12,52 +12,39 @@ import fitz
 from google import genai
 from google.genai import types
 from PIL import Image
+from pydantic import ValidationError
+
+from schema import Deed, empty_deed
+from validators import validate_deed
 
 logger = logging.getLogger(__name__)
 
-# Caps response size (and cost). Gemini 2.5 counts "thinking" tokens here too,
+# Caps response size (and cost). Gemini counts "thinking" tokens here too,
 # so this is set well above the ~1-2k tokens the JSON itself needs.
 MAX_OUTPUT_TOKENS = 16_384
 
+# First model is the default. Override with a comma-separated GEMINI_MODELS
+# env var when Google retires or renames models.
+DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.1-pro-preview"]
+MODELS = [m.strip() for m in os.environ.get("GEMINI_MODELS", "").split(",") if m.strip()] or DEFAULT_MODELS
+
 # ---------------------------------------------------------------------------
-# Schema & Prompt
+# Prompt (the output shape is enforced separately by schema.Deed)
 # ---------------------------------------------------------------------------
 
-SCHEMA: dict = {
-    "notary": {"name": None, "location": None, "registry_number": None},
-    "sellers": [
-        {"full_name": None, "tax_id": None, "id_document": None, "address": None}
-    ],
-    "buyers": [
-        {"full_name": None, "tax_id": None, "id_document": None, "address": None}
-    ],
-    "legal_representatives": [
-        {"full_name": None, "represents": None, "tax_id": None, "id_document": None}
-    ],
-    "property": {
-        "type": None, "address": None, "municipal_unit": None,
-        "floor": None, "area_sqm": None, "kaek": None, "building_permit": None,
-    },
-    "transaction": {"deed_type": None, "price": None, "date": None},
-}
+PROMPT = """
+Είσαι ειδικός στην ανάλυση ελληνικών συμβολαιογραφικών εγγράφων.
 
-PROMPT = f"""
-Είσαι ειδικός στην ανάλυση ελληνικών νοταριακών εγγράφων.
-
-Εξάγαγε τα παρακάτω στοιχεία από τις σελίδες του συμβολαίου.
-Επίστρεψε ΜΟΝΟ ένα έγκυρο JSON object — χωρίς εξήγηση,
-χωρίς markdown backticks, χωρίς πρόλογο.
+Εξάγαγε τα στοιχεία του συμβολαίου από τις σελίδες που ακολουθούν,
+σύμφωνα με το schema της απάντησης.
 
 Κανόνες:
-- Αν ένα πεδίο δεν βρεθεί, άφησέ το null.
-- Αν υπάρχουν πολλοί πωλητές ή αγοραστές, βάλε ΟΛΑ στις λίστες.
-- Σε γονική παροχή: πωλητής = γονέας, αγοραστής = παιδί.
-- Το KAEK είναι μακρύς αριθμός (π.χ. 05 23 06 00 00 01234/0/0).
+- Αν ένα πεδίο δεν αναγράφεται στο έγγραφο, βάλε null. Μην μαντεύεις.
+- Αντέγραψε αριθμούς (ΑΦΜ, ΚΑΕΚ, ταυτότητες) ακριβώς όπως γράφονται.
+- Αν υπάρχουν πολλοί πωλητές ή αγοραστές, βάλε ΟΛΟΥΣ στις λίστες.
+- Σε γονική παροχή ή δωρεά: πωλητής = γονέας / δωρητής, αγοραστής = τέκνο / δωρεοδόχος.
 - Η τιμή μπορεί να αναφέρεται ως "τίμημα" ή "αντάλλαγμα".
-- area_sqm πρέπει να είναι αριθμός (float), όχι string.
-
-Schema:
-{json.dumps(SCHEMA, ensure_ascii=False, indent=2)}
+- Μετάτρεψε την ημερομηνία υπογραφής σε μορφή YYYY-MM-DD.
 """
 
 # ---------------------------------------------------------------------------
@@ -115,7 +102,7 @@ class BaseExtractor(ABC):
             return json.loads(clean)
         except json.JSONDecodeError as exc:
             logger.error("JSON parse error: %s", exc)
-            return {**SCHEMA, "_error": str(exc)}
+            return {**empty_deed(), "_error": str(exc)}
 
     def _meta(self, elapsed: float, pages: int) -> dict:
         return {
@@ -132,7 +119,7 @@ class BaseExtractor(ABC):
 class GeminiExtractor(BaseExtractor):
     """Google Gemini Vision extraction backend."""
 
-    MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"]
+    MODELS = MODELS
 
     def extract(self, image_paths: list[Path]) -> dict:
         client = genai.Client(api_key=self.api_key)
@@ -145,6 +132,8 @@ class GeminiExtractor(BaseExtractor):
                 contents=[*images, PROMPT],
                 config=types.GenerateContentConfig(
                     max_output_tokens=MAX_OUTPUT_TOKENS,
+                    response_mime_type="application/json",
+                    response_schema=Deed,
                 ),
             )
             elapsed = time.perf_counter() - t0
@@ -157,9 +146,22 @@ class GeminiExtractor(BaseExtractor):
             elapsed, self.model_name, len(images),
         )
 
-        data = self._parse_response(response.text)
+        data = self._structured(response)
+        data["_validation"] = validate_deed(data)
         data["_meta"] = self._meta(elapsed, len(images))
         return data
+
+    def _structured(self, response: types.GenerateContentResponse) -> dict:
+        """Schema-validated output, falling back to plain JSON parsing."""
+        if isinstance(response.parsed, Deed):
+            return response.parsed.model_dump(mode="json")
+        try:
+            return Deed.model_validate_json(response.text or "").model_dump(mode="json")
+        except ValidationError:
+            # Schema-constrained output should always validate; keep whatever
+            # JSON came back rather than losing it, and flag the problem.
+            logger.warning("Response did not match the schema; parsing as plain JSON")
+            return self._parse_response(response.text)
 
 # ---------------------------------------------------------------------------
 # Pipeline
@@ -174,7 +176,7 @@ def _get_extractor(model_name: str, api_key: str) -> BaseExtractor:
 def run_pipeline(
     pdf_path: str,
     api_key: str,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = MODELS[0],
 ) -> dict:
     """PDF → page images → VLM extraction → structured dict.
 
@@ -200,7 +202,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract structured data from a notarial deed PDF.")
     parser.add_argument("--pdf",    required=True,                  help="Path to the input PDF")
     parser.add_argument("--output", default="extracted_data.json",  help="Output JSON path")
-    parser.add_argument("--model",  default="gemini-2.5-flash",     choices=GeminiExtractor.MODELS)
+    parser.add_argument("--model",  default=MODELS[0],              choices=MODELS)
     args = parser.parse_args()
 
     api_key = os.environ.get("GEMINI_API_KEY")

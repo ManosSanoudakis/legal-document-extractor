@@ -23,3 +23,32 @@ export function downloadJson(data: unknown, filename: string): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const DEED_TYPES: Record<string, string> = {
+  sale: "Sale",
+  parental_provision: "Parental provision",
+  donation: "Donation",
+  other: "Other",
+};
+
+/** "parental_provision" → "Parental provision" */
+export function deedType(value: unknown): string {
+  const v = text(value);
+  return DEED_TYPES[v] ?? v;
+}
+
+/** "sellers[0].tax_id" → "Seller 1 · tax ID" */
+export function fieldLabel(field: string): string {
+  const names: Record<string, string> = {
+    sellers: "Seller", buyers: "Buyer", legal_representatives: "Representative",
+    tax_id: "tax ID (ΑΦΜ)", id_document: "ID document", full_name: "name", area_sqm: "area",
+    kaek: "ΚΑΕΚ", deed_type: "deed type", registry_number: "registry number",
+    building_permit: "building permit", municipal_unit: "municipal unit",
+  };
+  const m = field.match(/^(\w+)\[(\d+)\]\.(\w+)$/);
+  if (m) return `${names[m[1]] ?? m[1]} ${Number(m[2]) + 1} · ${names[m[3]] ?? m[3]}`;
+  const [section, key] = field.split(".");
+  if (!key) return names[section] ? `${names[section]}s` : section;
+  const label = names[key] ?? key.replace(/_/g, " ");
+  return `${section[0].toUpperCase()}${section.slice(1)} · ${label}`;
+}
