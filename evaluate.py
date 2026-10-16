@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
-import time
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from extractor import GeminiExtractor, SCHEMA, pdf_to_images
+from accuracy import score_accuracy
+from extractor import GeminiExtractor, pdf_to_images
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +90,7 @@ class RunResult:
     elapsed:      float
     error:        str | None = None
     raw:          dict       = field(default_factory=dict)
+    accuracy:     dict | None = None
 
 
 def _run_once(
@@ -119,16 +122,20 @@ def run_evaluation(
     pdf_path: str,
     api_key: str,
     models: list[str] | None = None,
-    pages_dir: str = "pages",
+    truth: dict | None = None,
 ) -> dict:
     """
     Run extraction with each model and return a comparison report.
+
+    Page images are written to a temporary directory that is deleted
+    once all models have run.
 
     Args:
         pdf_path:  Path to the input PDF.
         api_key:   Gemini API key.
         models:    Models to benchmark (default: flash + pro).
-        pages_dir: Directory for cached page images.
+        truth:     Ground-truth deed. When given, each model is also scored
+                   on field-level accuracy, which decides the winner.
 
     Returns:
         Evaluation report dict suitable for JSON serialisation.
@@ -136,8 +143,16 @@ def run_evaluation(
     if models is None:
         models = GeminiExtractor.MODELS
 
-    image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
-    runs = [_run_once(image_paths, api_key, m) for m in models]
+    with tempfile.TemporaryDirectory() as pages_dir:
+        image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
+        # Models run in parallel: total time is the slowest model, not the sum
+        with ThreadPoolExecutor(max_workers=len(models)) as pool:
+            runs = list(pool.map(lambda m: _run_once(image_paths, api_key, m), models))
+
+    if truth is not None:
+        for r in runs:
+            if not r.error:
+                r.accuracy = score_accuracy(r.raw, truth)
 
     report: dict = {
         "pdf": pdf_path,
@@ -146,6 +161,8 @@ def run_evaluation(
                 "model":        r.model,
                 "elapsed_s":    r.elapsed,
                 "completeness": r.completeness,
+                "accuracy":     r.accuracy,
+                "checks_failed": len(r.raw.get("_validation", [])),
                 "error":        r.error,
             }
             for r in runs
@@ -154,10 +171,13 @@ def run_evaluation(
 
     if len(runs) == 2 and not any(r.error for r in runs):
         report["field_diffs"] = field_diff(runs[0].raw, runs[1].raw)
+        if truth is not None:
+            best = max(runs, key=lambda r: r.accuracy["accuracy_pct"])
+        else:
+            best = max(runs, key=lambda r: r.completeness.get("overall_pct", 0))
         report["winner"] = {
-            "accuracy": max(
-                runs, key=lambda r: r.completeness.get("overall_pct", 0)
-            ).model,
+            "accuracy": best.model,
+            "basis": "accuracy" if truth is not None else "completeness",
             "speed": min(runs, key=lambda r: r.elapsed).model,
         }
 
@@ -169,8 +189,8 @@ def run_evaluation(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import os
     import argparse
+    import os
 
     logging.basicConfig(
         level=logging.INFO,
@@ -179,6 +199,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Benchmark Gemini models on a PDF.")
     parser.add_argument("--pdf",    required=True)
+    parser.add_argument("--truth",  help="Ground-truth JSON for field-level accuracy")
     parser.add_argument("--output", default="evaluation_results.json")
     args = parser.parse_args()
 
@@ -186,7 +207,8 @@ if __name__ == "__main__":
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-    report = run_evaluation(pdf_path=args.pdf, api_key=api_key)
+    truth = json.loads(Path(args.truth).read_text(encoding="utf-8")) if args.truth else None
+    report = run_evaluation(pdf_path=args.pdf, api_key=api_key, truth=truth)
 
     out = Path(args.output)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -195,11 +217,12 @@ if __name__ == "__main__":
         print(
             f"{m['model']:30s}  "
             f"completeness={m['completeness'].get('overall_pct', 'N/A')}%  "
-            f"elapsed={m['elapsed_s']:.2f}s"
+            + (f"accuracy={m['accuracy']['accuracy_pct']}%  " if m["accuracy"] else "")
+            + f"elapsed={m['elapsed_s']:.2f}s"
         )
 
     if "winner" in report:
         w = report["winner"]
-        print(f"\n🏆 Accuracy → {w['accuracy']}  |  ⚡ Speed → {w['speed']}")
+        print(f"\nMost {w['basis']}: {w['accuracy']}  |  Fastest: {w['speed']}")
 
     print(f"\nFull report saved to {out}")
