@@ -23,7 +23,7 @@ The pipeline converts a PDF into page images (plus the PDF's own text, when it h
 
 ![Extraction results for the fictional sample deed](docs/screenshots/extraction.png)
 
-<sub>Screenshots show the first demo deed: a real Gemini answer saved from a benchmark run, with the checks re-run (the batch screenshot repeats it for each file unless `GEMINI_API_KEY` is set). Regenerate them with `python scripts/screenshots.py`.</sub>
+<sub>Screenshots show the demo deeds: real Gemini answers saved from a benchmark run, with the checks re-run. Regenerate them with `python scripts/screenshots.py`.</sub>
 
 | Source quotes | Editing | Batch |
 |---|---|---|
@@ -141,7 +141,7 @@ A trade-off between quality and speed. Lower DPI means smaller files and faster 
 Separating the API from the UI means the extraction service can be used by any client (scripts, other services) and the frontend has full control over layout and interaction. FastAPI also generates interactive API docs automatically.
 
 ### Why does each user bring their own API key?
-No key is stored on the server. The browser keeps the key in memory and sends it per request in the `X-Gemini-Key` header, so nobody can spend someone else's quota; the demo covers people without one. For real client deeds, use a paid key: Google's terms allow content sent on the free tier to be used to improve its products, which personal data should not be. A firm would then keep its own key on the server and add logins (see `TODO: SECURITY` in `deed_extractor/api.py`).
+No key is stored on the server. The browser keeps the key in memory and sends it per request in the `X-Gemini-Key` header, so nobody can spend someone else's quota; the demo covers people without one. For real client deeds, use a paid key: Google's terms allow content sent on the free tier to be used to improve its products, which personal data should not be. A firm would then keep its own key on the server and add logins (see [Security](#security)).
 
 ### Evaluation methodology
 Real deeds cannot be shared, so `samples/make_sample_deed.py` generates fictional deeds together with a JSON file of the correct values. That makes three measurements possible:
@@ -199,6 +199,7 @@ A prompt fix found on one set and measured on the same set can simply be fitted 
 │   ├── src/
 │   │   ├── App.tsx                 # Layout, state, run logic
 │   │   ├── api.ts                  # Typed API client
+│   │   ├── *.test.ts               # Vitest tests for the deed and format helpers
 │   │   └── components/             # Settings, document picker, results, evaluation
 │   ├── Dockerfile                  # Build with Node, serve with nginx
 │   └── nginx.conf                  # Serves the app, proxies /api to the backend
@@ -263,9 +264,13 @@ The benchmark saves each model's raw output, so a change to the scoring can be r
 pip install -r requirements-dev.txt
 ruff check .
 python -m pytest
+
+cd frontend
+npm run lint                     # oxlint, including the React hooks rules
+npm test                         # Vitest
 ```
 
-The tests mock Gemini, so they need no API key and make no network calls. GitHub Actions runs the same checks on every push, plus the frontend type-check and build (`npm ci` from the lockfile) and the Docker image builds.
+The tests mock Gemini, so they need no API key and make no network calls. GitHub Actions runs the same checks on every push, plus the frontend type-check and build (`npm ci` from the lockfile) and the Docker image builds. The frontend uses oxlint rather than ESLint because typescript-eslint does not support TypeScript 7 yet.
 
 ### Models
 
@@ -328,6 +333,26 @@ For many deeds, use the **Batch** tab: drop up to 20 PDFs, follow the progress, 
 
 ---
 
+## Security
+
+The app is built to run on one machine or an office network, not as a public service.
+
+**What it does:**
+- **API keys**: each request carries the caller's key in the `X-Gemini-Key` header. The browser keeps it in memory only (never in storage), the server never stores or logs it, and a background job drops it when the job ends.
+- **Documents**: an uploaded PDF and its page images exist only as temporary files while they are processed. History keeps the extracted values, corrections and review ticks, never the PDF, and `HISTORY_RETENTION_DAYS` deletes old entries.
+- **Input limits**: PDFs only (checked by content, not file name), 20 MB and 30 pages each, 20 files per batch, 4 jobs at a time, 30 fields per second look, and model output capped at 16k tokens.
+- **The model cannot act**: it only fills in a fixed schema. It has no tools, cannot call anything, and its answer is shown as text (React escapes it). A deed written to mislead it can at most produce wrong values, and those face the same checks as any others.
+- **Exports**: a value that starts like a spreadsheet formula (`=`, `+`, `-`, `@`) is written as text, so a malicious document cannot plant a formula in the Excel or CSV file (CSV injection).
+- **Demo files**: served only by id from a fixed list, never by a path from the request.
+
+**What it does not do (needed before hosting it for others):**
+- **Logins.** Anyone who can reach the server sees and edits the same history.
+- **Limits per user.** The job limit is global; one person can fill it.
+- **A server-side key** for a firm's own account, ideally a paid one: Google's terms allow content sent on the free tier to be used to improve its products, which client data should not be.
+- **HTTPS.** Run it behind a proxy that provides it.
+
+---
+
 ## Assumptions
 
 - A deed may have multiple sellers, buyers, and legal representatives — all are extracted as lists.
@@ -344,7 +369,7 @@ For many deeds, use the **Batch** tab: drop up to 20 PDFs, follow the progress, 
 - **Add or remove parties while editing**: editing currently changes existing values only
 - **Native PDF input**: Gemini accepts PDFs directly, which would remove the image conversion step
 - **Multi-document support**: different schemas and prompts per document type (lease, will, etc.)
-- **Authentication & usage limits**: needed before hosting the app publicly (see `TODO: SECURITY` in `deed_extractor/api.py`)
+- **Authentication & usage limits**: needed before hosting the app publicly (see [Security](#security))
 - **Confidence scores**: prompt the model to return a confidence value per field
 - **Persistent jobs**: a queue and separate workers, so jobs survive a restart and the API can run as several processes
 - **Mixed PDFs**: the text check runs only when every page has text; a deed with some scanned pages could check the pages that do

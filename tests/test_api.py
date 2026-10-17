@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from google.genai import errors as genai_errors
 
 from deed_extractor import api
+from deed_extractor.evaluate import EvaluationReport
 from deed_extractor.schema import ExtractionResult
 
 KEY = {"X-Gemini-Key": "test-key"}
@@ -73,7 +74,7 @@ def test_extract_sample(client, monkeypatch, sample_truth):
 def fake_evaluation(seen: dict):
     def run(pdf_path, api_key, truth=None, on_stage=None, raise_if_all_failed=False):
         seen.update(truth=truth, raises=raise_if_all_failed)
-        return {"models": [{"model": "m", "error": None}]}
+        return EvaluationReport(pdf=pdf_path, models=[], raw_results={})
     return run
 
 
@@ -172,6 +173,24 @@ def test_export_xlsx_and_csv(client, sample_truth):
     csv_text = client.post("/api/export?format=csv", json=sample_truth).content.decode("utf-8-sig")
     assert "Transaction,Price (EUR),185000" in csv_text
     assert client.post("/api/export?format=pdf", json=sample_truth).status_code == 422
+
+
+def test_exports_never_contain_formulas(client, sample_truth):
+    """A value from the document that looks like a formula is written as text (CSV / formula injection)."""
+    import io
+
+    from openpyxl import load_workbook
+
+    deed = {**sample_truth, "notary": {**sample_truth["notary"], "name": '=HYPERLINK("http://x","click")'}}
+    wb = load_workbook(io.BytesIO(client.post("/api/export?format=xlsx", json=deed).content))
+    names = [row[2] for row in wb["Deed"].values if row[1] == "Name"]
+    assert names == ["'=HYPERLINK(\"http://x\",\"click\")"]
+    csv_text = client.post("/api/export?format=csv", json=deed).content.decode("utf-8-sig")
+    assert "'=HYPERLINK" in csv_text and ",=HYPERLINK" not in csv_text and ',"=HYPERLINK' not in csv_text
+    batch = [{"name": "@evil.pdf", "deed": deed}]
+    rows = list(load_workbook(io.BytesIO(
+        client.post("/api/export/batch?format=xlsx", json={"deeds": batch}).content))["Deeds"].values)
+    assert rows[1][0] == "'@evil.pdf"
 
 
 def test_batch_job_end_to_end(client, monkeypatch, sample_truth):

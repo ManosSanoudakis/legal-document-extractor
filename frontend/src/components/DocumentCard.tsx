@@ -210,6 +210,7 @@ function Preview({ document, page }: { document: DocumentChoice; page: number | 
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
       {/* key forces a reload so the browser PDF viewer jumps to the new page */}
+      {/* oxlint-disable-next-line react/iframe-missing-sandbox -- Chrome shows no PDF in a sandboxed iframe; the source is our own API or a local file */}
       <iframe
         id="document-preview"
         key={page ?? 0}

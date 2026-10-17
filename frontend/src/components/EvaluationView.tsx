@@ -4,7 +4,7 @@ import { JsonPanel } from "./ResultsView";
 import { Alert, Badge, Cell, SectionTitle, Stat, Table } from "./ui";
 
 function completeness(run: ModelRun): Partial<Completeness> {
-  return run.completeness as Partial<Completeness>;
+  return run.completeness ?? {};
 }
 
 function Bar({ pct }: { pct: number | undefined }) {

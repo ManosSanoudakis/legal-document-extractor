@@ -97,15 +97,15 @@ export function ReviewPanel({
 
       <ul className="mt-2 space-y-2">
         {groups.map(([field, fieldIssues]) => {
-          const done = reviewed.has(field);
+          const isChecked = reviewed.has(field);
           const answer = answers[field];
           const current = tryGetPath(deed, field);
           return (
-            <li key={field} className={cx("flex items-start gap-2.5", done && "opacity-60")}>
+            <li key={field} className={cx("flex items-start gap-2.5", isChecked && "opacity-60")}>
               <input
                 type="checkbox"
                 className="mt-1 accent-current"
-                checked={done}
+                checked={isChecked}
                 onChange={() => onToggleReviewed(field)}
                 aria-label={`Mark ${fieldLabel(field)} as checked`}
               />
@@ -115,7 +115,7 @@ export function ReviewPanel({
                   <span className="font-mono text-xs"> {text(current)}</span>
                 )}
                 : {fieldIssues.map((i) => i.message).join(" ")}
-                {answer && !done && (
+                {answer && !isChecked && (
                   <SecondLook
                     answer={answer}
                     onUse={() => onUse(field, isNumberField(field) ? parseNumber(answer.value ?? "") : answer.value)}

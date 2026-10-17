@@ -170,7 +170,6 @@ export function ResultsView({
   // Re-check the data shortly after the user stops typing
   useEffect(() => {
     if (!edited) return;
-    setChecking(true);
     const timer = setTimeout(() => {
       // Text-layer flags stay on fields the user has not changed
       const textFlags = result.validation.filter(
@@ -190,6 +189,7 @@ export function ResultsView({
     setDeed(next);
     onChange?.(next);
     setEdited(true);
+    setChecking(true); // the checks re-run shortly, in the effect below
   }
 
   function reset() {
@@ -330,22 +330,22 @@ export function ResultsView({
           <div className="space-y-5">
             <FieldGrid
               fields={[
-                ["Type", <Value path="property.type" />],
-                ["Floor", <Value path="property.floor" />],
-                ["Area", <Value path="property.area_sqm" kind="number" format={area} />],
-                ["Municipal unit", <Value path="property.municipal_unit" />],
-                ["Address", <Value path="property.address" />],
-                ["Price", <Value path="transaction.price" kind="number" format={price} />],
-                ["Deed type", <Value path="transaction.deed_type" kind="deedType" format={deedType} />],
-                ["Date (YYYY-MM-DD)", <Value path="transaction.date" />],
+                ["Type", <Value key="property.type" path="property.type" />],
+                ["Floor", <Value key="property.floor" path="property.floor" />],
+                ["Area", <Value key="property.area_sqm" path="property.area_sqm" kind="number" format={area} />],
+                ["Municipal unit", <Value key="property.municipal_unit" path="property.municipal_unit" />],
+                ["Address", <Value key="property.address" path="property.address" />],
+                ["Price", <Value key="transaction.price" path="transaction.price" kind="number" format={price} />],
+                ["Deed type", <Value key="transaction.deed_type" path="transaction.deed_type" kind="deedType" format={deedType} />],
+                ["Date (YYYY-MM-DD)", <Value key="transaction.date" path="transaction.date" />],
               ]}
             />
             <div className="border-t border-stone-100 pt-5 dark:border-stone-800">
               <SectionTitle>Land registry</SectionTitle>
               <FieldGrid
                 fields={[
-                  ["ΚΑΕΚ", <Value path="property.kaek" />],
-                  ["Building permit", <Value path="property.building_permit" />],
+                  ["ΚΑΕΚ", <Value key="property.kaek" path="property.kaek" />],
+                  ["Building permit", <Value key="property.building_permit" path="property.building_permit" />],
                 ]}
               />
             </div>
@@ -355,9 +355,9 @@ export function ResultsView({
         {tab === "notary" && (
           <FieldGrid
             fields={[
-              ["Notary", <Value path="notary.name" />],
-              ["Location", <Value path="notary.location" />],
-              ["Registry number", <Value path="notary.registry_number" />],
+              ["Notary", <Value key="notary.name" path="notary.name" />],
+              ["Location", <Value key="notary.location" path="notary.location" />],
+              ["Registry number", <Value key="notary.registry_number" path="notary.registry_number" />],
             ]}
           />
         )}

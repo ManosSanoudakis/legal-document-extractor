@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, evaluate, extract, getConfig, getDemo, recheck } from "./api";
 import { BatchView, STAGE_LABELS } from "./components/BatchView";
 import { DocumentCard } from "./components/DocumentCard";
@@ -20,7 +20,8 @@ function useTask<T>() {
   const [task, setTask] = useState<Task<T>>({ status: "idle" });
   const runId = useRef(0);
 
-  async function run(job: () => Promise<T>) {
+  // Stable across renders, so effects can depend on them
+  const run = useCallback(async (job: () => Promise<T>) => {
     const id = ++runId.current;
     setTask({ status: "running", startedAt: Date.now() });
     try {
@@ -30,18 +31,18 @@ function useTask<T>() {
       const message = err instanceof ApiError || err instanceof Error ? err.message : "Unexpected error";
       if (id === runId.current) setTask({ status: "error", message });
     }
-  }
+  }, []);
 
-  function reset() {
+  const reset = useCallback(() => {
     runId.current++;
     setTask({ status: "idle" });
-  }
+  }, []);
 
   return { task, run, reset };
 }
 
 function useElapsed(startedAt: number | null): number {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (startedAt === null) return;
     const timer = setInterval(() => setNow(Date.now()), 250);
@@ -65,11 +66,15 @@ export default function App() {
   const evaluation = useTask<EvaluationReport>();
 
   /** A demo deed opens on its saved answer at once: no key, no model call. */
-  function showDemoAnswer(next: DocumentChoice | null) {
-    if (next?.kind !== "demo") return;
-    setStage(null);
-    extraction.run(() => getDemo(next.demo.id));
-  }
+  const runExtraction = extraction.run;
+  const showDemoAnswer = useCallback(
+    (next: DocumentChoice | null) => {
+      if (next?.kind !== "demo") return;
+      setStage(null);
+      runExtraction(() => getDemo(next.demo.id));
+    },
+    [runExtraction],
+  );
 
   useEffect(() => {
     getConfig()
@@ -85,7 +90,7 @@ export default function App() {
         showDemoAnswer(first);
       })
       .catch((err: Error) => setConfigError(err.message));
-  }, []);
+  }, [showDemoAnswer]); // stable, so this runs once, on load
 
   /** Jump the PDF preview to a page and bring it into view. */
   function showPage(page: number) {

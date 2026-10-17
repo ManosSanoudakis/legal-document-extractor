@@ -7,6 +7,9 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict
 
 from .accuracy import score_accuracy
 from .extractor import GeminiExtractor, pdf_page_texts, pdf_to_images
@@ -82,6 +85,66 @@ def field_diff(a: dict, b: dict) -> list[dict]:
     return diffs
 
 # ---------------------------------------------------------------------------
+# Report
+# ---------------------------------------------------------------------------
+
+class Mismatch(BaseModel):
+    field: str
+    expected: Any = None
+    got: Any = None
+
+
+class Accuracy(BaseModel):
+    """Field-level accuracy against known correct values (see accuracy.py)."""
+    accuracy_pct: float
+    correct: int
+    total: int
+    extra_parties: int  # people the model invented
+    mismatches: list[Mismatch]
+
+
+class Completeness(BaseModel):
+    """The share of fields filled in, right or wrong."""
+    scalar_pct: float
+    list_pct: float
+    overall_pct: float
+    filled: int
+    total: int
+
+
+class ModelRun(BaseModel):
+    model: str
+    elapsed_s: float
+    completeness: Completeness | None  # None if the run failed
+    accuracy: Accuracy | None  # None without known correct values, or if the run failed
+    checks_failed: int
+    error: str | None
+
+
+class FieldDiff(BaseModel):
+    field: str
+    model_a: Any
+    model_b: Any
+
+
+class Winner(BaseModel):
+    accuracy: str  # the more accurate (or complete) model; on a tie, the faster one
+    basis: Literal["accuracy", "completeness"]
+    tie: bool
+    speed: str
+
+
+class EvaluationReport(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    pdf: str
+    models: list[ModelRun]
+    field_diffs: list[FieldDiff] | None = None  # only when exactly two models both succeeded
+    winner: Winner | None = None
+    # Each model's full answer, so a change to the scoring can be re-applied later
+    raw_results: dict[str, ExtractionResult | None]
+
+# ---------------------------------------------------------------------------
 # Single-run benchmark
 # ---------------------------------------------------------------------------
 
@@ -131,7 +194,7 @@ def run_evaluation(
     truth: dict | None = None,
     on_stage: Callable[[str], None] | None = None,
     raise_if_all_failed: bool = False,
-) -> dict:
+) -> EvaluationReport:
     """
     Run extraction with each model and return a comparison report.
 
@@ -149,7 +212,7 @@ def run_evaluation(
                    (e.g. a rejected key), instead of reporting it per model.
 
     Returns:
-        Evaluation report dict suitable for JSON serialisation.
+        The comparison, with each model's full answer.
     """
     if models is None:
         models = GeminiExtractor.MODELS
@@ -172,39 +235,37 @@ def run_evaluation(
             if not r.error:
                 r.accuracy = score_accuracy(r.deed, truth)
 
-    report: dict = {
-        "pdf": pdf_path,
-        "models": [
-            {
-                "model":        r.model,
-                "elapsed_s":    r.elapsed,
-                "completeness": r.completeness,
-                "accuracy":     r.accuracy,
-                "checks_failed": len(r.result.validation) if r.result else 0,
-                "error":        r.error,
-            }
+    report = EvaluationReport(
+        pdf=pdf_path,
+        models=[
+            ModelRun(
+                model=r.model,
+                elapsed_s=r.elapsed,
+                completeness=r.completeness or None,
+                accuracy=r.accuracy,
+                checks_failed=len(r.result.validation) if r.result else 0,
+                error=r.error,
+            )
             for r in runs
         ],
-    }
+        raw_results={r.model: r.result for r in runs},
+    )
 
     if len(runs) == 2 and not any(r.error for r in runs):
-        report["field_diffs"] = field_diff(runs[0].deed, runs[1].deed)
+        report.field_diffs = field_diff(runs[0].deed, runs[1].deed)
         if truth is not None:
             score = lambda r: r.accuracy["accuracy_pct"]  # noqa: E731
         else:
             score = lambda r: r.completeness.get("overall_pct", 0)  # noqa: E731
         fastest = min(runs, key=lambda r: r.elapsed)
         tie = score(runs[0]) == score(runs[1])
-        report["winner"] = {
+        report.winner = Winner(
             # On a tie the faster model wins, not whichever happens to be listed first
-            "accuracy": fastest.model if tie else max(runs, key=score).model,
-            "basis": "accuracy" if truth is not None else "completeness",
-            "tie": tie,
-            "speed": fastest.model,
-        }
-
-    # Each model's full answer, so a change to the scoring can be re-applied later
-    report["raw_results"] = {r.model: r.result.model_dump(mode="json") if r.result else None for r in runs}
+            accuracy=fastest.model if tie else max(runs, key=score).model,
+            basis="accuracy" if truth is not None else "completeness",
+            tie=tie,
+            speed=fastest.model,
+        )
     return report
 
 # ---------------------------------------------------------------------------
@@ -234,19 +295,19 @@ if __name__ == "__main__":
     report = run_evaluation(pdf_path=args.pdf, api_key=api_key, truth=truth)
 
     out = Path(args.output)
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    out.write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
-    for m in report["models"]:
+    for m in report.models:
         print(
-            f"{m['model']:30s}  "
-            f"completeness={m['completeness'].get('overall_pct', 'N/A')}%  "
-            + (f"accuracy={m['accuracy']['accuracy_pct']}%  " if m["accuracy"] else "")
-            + f"elapsed={m['elapsed_s']:.2f}s"
+            f"{m.model:30s}  "
+            f"completeness={m.completeness.overall_pct if m.completeness else 'N/A'}%  "
+            + (f"accuracy={m.accuracy.accuracy_pct}%  " if m.accuracy else "")
+            + f"elapsed={m.elapsed_s:.2f}s"
         )
 
-    if "winner" in report:
-        w = report["winner"]
-        best = f"tie (faster: {w['accuracy']})" if w["tie"] else w["accuracy"]
-        print(f"\nMost {w['basis']}: {best}  |  Fastest: {w['speed']}")
+    if report.winner:
+        w = report.winner
+        best = f"tie (faster: {w.accuracy})" if w.tie else w.accuracy
+        print(f"\nMost {w.basis}: {best}  |  Fastest: {w.speed}")
 
     print(f"\nFull report saved to {out}")
