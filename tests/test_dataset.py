@@ -10,10 +10,14 @@ from schema import Deed
 from validators import afm_is_valid
 
 SAMPLES = Path(__file__).resolve().parent.parent / "samples"
-TRUTH_FILES = [SAMPLES / "sample_deed.json", *sorted((SAMPLES / "dataset").glob("*.json"))]
+TRUTH_FILES = [
+    SAMPLES / "sample_deed.json",
+    *sorted((SAMPLES / "dataset").glob("*.json")),
+    *sorted((SAMPLES / "dataset_long").glob("*.json")),
+]
 
 
-@pytest.mark.parametrize("truth_path", TRUTH_FILES, ids=lambda p: p.stem)
+@pytest.mark.parametrize("truth_path", TRUTH_FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_truth_matches_schema_and_pdf(truth_path):
     truth = json.loads(truth_path.read_text(encoding="utf-8"))
     Deed.model_validate({**truth, "sources": []})
@@ -43,3 +47,18 @@ def test_scanned_copies_share_ground_truth(scanned):
     with fitz.open(scanned) as doc, fitz.open(clean) as original:
         assert doc.page_count == original.page_count
         assert all(page.get_text().strip() == "" for page in doc), "scans must have no text layer"
+
+
+@pytest.mark.parametrize("pdf", sorted((SAMPLES / "dataset_long").glob("*.pdf")), ids=lambda p: p.stem)
+def test_long_deeds_hold_look_alikes_but_never_a_valid_afm(pdf):
+    """Long deeds must be long, carry other tax IDs and ΚΑΕΚ, and still contain no real ΑΦΜ."""
+    import re
+
+    truth = json.loads(pdf.with_suffix(".json").read_text(encoding="utf-8"))
+    with fitz.open(pdf) as doc:
+        assert doc.page_count >= 5
+        text = " ".join(" ".join(page.get_text() for page in doc).split())
+    afms = set(re.findall(r"Α\.Φ\.Μ\. (\d{9})", text))
+    real = {p["tax_id"] for p in truth["sellers"] + truth["buyers"] + truth["legal_representatives"]}
+    assert afms > real, "expected tax IDs of people who are not parties"
+    assert not any(afm_is_valid(a) for a in afms)
