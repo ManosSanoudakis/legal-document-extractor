@@ -13,11 +13,17 @@ units in the building with their own areas and ΚΑΕΚ, lawyers and engineers
 with tax IDs, the assessed value, taxes and fees. The truth JSON has the same
 shape; only the real values count, so a model that grabs a look-alike is wrong.
 
+Varied deeds (--varied) are long deeds that also differ in wording and layout:
+headings, how parties and dates are written, amounts, section order. Harsh
+scans (--harsh) add what real scans have: a notary stamp over the text,
+signatures, a handwritten note in the margin, photocopy streaks.
+
 Usage:
     python samples/make_sample_deed.py               # samples/sample_deed.pdf + .json
     python samples/make_sample_deed.py --dataset 10  # also samples/dataset/deed_01..10
     python samples/make_sample_deed.py --dataset 10 --scanned  # + scan-like copies
     python samples/make_sample_deed.py --long 10     # also samples/dataset_long/deed_01..10
+    python samples/make_sample_deed.py --varied 10 --harsh  # samples/dataset_varied(_scanned)/
 """
 from __future__ import annotations
 
@@ -31,7 +37,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import fitz
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent))
@@ -99,6 +105,18 @@ class Distractors:
 
 
 @dataclass
+class Style:
+    """How a deed is worded and laid out. The defaults are the original template."""
+    heading: str = "ordinal"       # "ordinal" ΠΡΩΤΟ — Χ. | "article" Άρθρο 1 — Χ. | "number" 1. Χ.
+    party: str = "prose"           # "prose" | "fields" (Α.Φ.Μ.: … · Δ.Α.Τ.: …) | "formal" (with birth year, Δ.Ο.Υ.)
+    when: str | None = None        # None: as date_style | "weekday" Παρασκευή 15 Μαρτίου 2024 | "slash" 15/3/2024
+    amount: str = "symbol"         # "symbol" 185.000,00 € | "words" 185.000 ευρώ | "prefix" ευρώ 185.000,00
+    area: str = "words"            # "words" τετραγωνικών μέτρων (τ.μ.) | "short" τ.μ. | "m2" m²
+    intro: str = "notary_first"    # "notary_first" | "before_me": ενώπιον εμού (name, συμβολαιογράφου …)
+    shuffle_seed: int | None = None  # reorder a long deed's extra sections
+
+
+@dataclass
 class DeedSpec:
     deed_type: str                      # "sale" | "parental_provision"
     notary: str
@@ -119,6 +137,7 @@ class DeedSpec:
     representative: Person | None = None
     represents: Person | None = None
     long: Distractors | None = None     # set for long deeds only
+    style: Style = field(default_factory=Style)
 
     def truth(self) -> dict:
         """The values a perfect extraction would return."""
@@ -432,6 +451,23 @@ def add_distractors(spec: DeedSpec, rng: random.Random) -> DeedSpec:
     return spec
 
 
+GREEK_WEEKDAYS = ["Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο", "Κυριακή"]
+
+
+def vary(spec: DeedSpec, rng: random.Random) -> DeedSpec:
+    """Pick a random wording and layout, so a model cannot lean on one template."""
+    spec.style = Style(
+        heading=rng.choice(["ordinal", "article", "number"]),
+        party=rng.choice(["prose", "fields", "formal"]),
+        when=rng.choice([None, "weekday", "slash"]),
+        amount=rng.choice(["symbol", "words", "prefix"]),
+        area=rng.choice(["words", "short", "m2"]),
+        intro=rng.choice(["notary_first", "before_me"]),
+        shuffle_seed=rng.randrange(1_000_000),
+    )
+    return spec
+
+
 def fmt_date(d: date, genitive: bool = False) -> str:
     """15η Μαρτίου 2024, or 15ης Μαρτίου 2024 after a genitive ("της ...")."""
     return f"{d.day}{'ης' if genitive else 'η'} {GREEK_MONTHS[d.month - 1]} {d.year}"
@@ -577,20 +613,42 @@ def greek_amount(value: float, decimals: int = 2) -> str:
 
 
 def deed_html(d: DeedSpec) -> str:
-    if d.date_style == "words":
-        when = f"σήμερα, την {d.signed.day}η {GREEK_MONTHS[d.signed.month - 1]} του έτους {d.signed.year}"
+    st = d.style
+    month = GREEK_MONTHS[d.signed.month - 1]
+    if st.when == "weekday":
+        when = f"σήμερα, {GREEK_WEEKDAYS[d.signed.weekday()]} {d.signed.day} {month} {d.signed.year}"
+    elif st.when == "slash":
+        when = f"σήμερα, {d.signed.day}/{d.signed.month}/{d.signed.year}"
+    elif d.date_style == "words":
+        when = f"σήμερα, την {d.signed.day}η {month} του έτους {d.signed.year}"
     else:
         when = f"σήμερα, {d.signed:%d.%m.%Y}"
 
     def party(p: Person) -> str:
-        text = f"<b>{p.name}</b>, κάτοικος {p.address}, με Α.Φ.Μ. {p.afm} και αριθμό δελτίου ταυτότητας {p.id_doc}"
+        if st.party == "fields":
+            text = f"<b>{p.name}</b> — κάτοικος: {p.address} · Α.Φ.Μ.: {p.afm} · Δ.Α.Τ.: {p.id_doc}"
+        elif st.party == "formal":
+            # Birth year and tax office follow from the tax ID, so they need no extra randomness
+            born, office = 1940 + int(p.afm[:2]) % 60, TAX_OFFICES[int(p.afm[-1]) % len(TAX_OFFICES)]
+            text = (
+                f"<b>{p.name}</b>, που γεννήθηκε το {born}, κάτοικος {p.address}, κάτοχος του υπ' αριθμ. "
+                f"{p.id_doc} δελτίου αστυνομικής ταυτότητας, με Α.Φ.Μ. {p.afm} (Δ.Ο.Υ. {office})"
+            )
+        else:
+            text = f"<b>{p.name}</b>, κάτοικος {p.address}, με Α.Φ.Μ. {p.afm} και αριθμό δελτίου ταυτότητας {p.id_doc}"
         if d.representative and d.represents is p:
             r = d.representative
-            text += (
-                f", που εκπροσωπείται στο παρόν από πληρεξούσιο: <b>{r.name}</b>, "
-                f"με Α.Φ.Μ. {r.afm} και αριθμό δελτίου ταυτότητας {r.id_doc}, δυνάμει του "
-                f"υπ' αριθμ. 678/{d.signed.year} πληρεξουσίου του Συμβολαιογράφου Δοκιμών"
-            )
+            if st.party == "fields":
+                text += (
+                    f" · εκπροσωπείται από πληρεξούσιο: <b>{r.name}</b> (Α.Φ.Μ.: {r.afm}, Δ.Α.Τ.: {r.id_doc}), "
+                    f"δυνάμει του υπ' αριθμ. 678/{d.signed.year} πληρεξουσίου του Συμβολαιογράφου Δοκιμών"
+                )
+            else:
+                text += (
+                    f", που εκπροσωπείται στο παρόν από πληρεξούσιο: <b>{r.name}</b>, "
+                    f"με Α.Φ.Μ. {r.afm} και αριθμό δελτίου ταυτότητας {r.id_doc}, δυνάμει του "
+                    f"υπ' αριθμ. 678/{d.signed.year} πληρεξουσίου του Συμβολαιογράφου Δοκιμών"
+                )
         return text + "."
 
     def word(people: list[Person], male: str, female: str, plural: str) -> str:
@@ -612,36 +670,59 @@ def deed_html(d: DeedSpec) -> str:
     buyers = "".join(f"<p>{next(n)}) {party(p)}</p>" for p in d.buyers)
 
     extra = long_sections(d) if d.long else {"parties": "", "after_property": [], "after_deal": []}
-    heading = iter(ORDINALS)
+    if st.shuffle_seed is not None and d.long:
+        # Same sections, another order; some may now come between the property and the deal
+        pool = extra["after_property"] + extra["after_deal"]
+        order = random.Random(st.shuffle_seed)
+        order.shuffle(pool)
+        cut = order.randint(0, len(pool))
+        extra = {**extra, "after_property": pool[:cut], "after_deal": pool[cut:]}
+    numbers = iter(range(1, 100))
+
+    def heading(title: str) -> str:
+        n = next(numbers)
+        if st.heading == "article":
+            return f"<b>Άρθρο {n} — {title}.</b>"
+        if st.heading == "number":
+            return f"<b>{n}. {title}.</b>"
+        return f"<b>{ORDINALS[n - 1]} — {title}.</b>"
 
     def sections(items: list[tuple[str, str]]) -> str:
         # The heading goes inside the first paragraph, like the short deed's sections
-        return "".join(html.replace("<p>", f"<p><b>{next(heading)} — {title}.</b> ", 1) for title, html in items)
+        return "".join(html.replace("<p>", f"<p>{heading(title)} ", 1) for title, html in items)
 
+    area = {
+        "short": f"εμβαδού {greek_amount(d.area)} τ.μ.",
+        "m2": f"επιφάνειας {greek_amount(d.area)} m²",
+    }.get(st.area, f"εμβαδού {greek_amount(d.area)} τετραγωνικών μέτρων (τ.μ.)")
     floor = f", {d.floor}" if d.floor else ""
     prop = (
-        f"<p><b>{next(heading)} — ΤΟ ΑΚΙΝΗΤΟ.</b> {owner} ενός ακινήτου "
-        f"(<b>{d.property_type}</b>){floor}, εμβαδού {greek_amount(d.area)} τετραγωνικών μέτρων (τ.μ.), "
+        f"<p>{heading('ΤΟ ΑΚΙΝΗΤΟ')} {owner} ενός ακινήτου "
+        f"(<b>{d.property_type}</b>){floor}, {area}, "
         f"που βρίσκεται στη διεύθυνση {d.property_address}, στη {d.municipal_unit}, και φέρει Κωδικό Αριθμό "
         f"Εθνικού Κτηματολογίου (ΚΑΕΚ) <b>{d.kaek}</b>. Το ακίνητο ανεγέρθηκε ή οριοθετήθηκε νόμιμα "
         f"δυνάμει της υπ' αριθμ. {d.permit} άδειας.</p>"
     ) + sections(extra["after_property"])
     if sale:
+        amount = {
+            "words": f"{greek_amount(d.price, 0)} ευρώ",
+            "prefix": f"ευρώ {greek_amount(d.price)}",
+        }.get(st.amount, f"{greek_amount(d.price)} €")
         deal = (
-            f"<p><b>{next(heading)} — Η ΠΩΛΗΣΗ.</b> Με το παρόν "
+            f"<p>{heading('Η ΠΩΛΗΣΗ')} Με το παρόν "
             + word(d.sellers, "ο πωλητής πωλεί και μεταβιβάζει", "η πωλήτρια πωλεί και μεταβιβάζει",
                    "οι πωλητές πωλούν και μεταβιβάζουν")
             + " " + word(d.buyers, "στον αγοραστή", "στην αγοράστρια", "στους αγοραστές")
             + " την πλήρη κυριότητα του παραπάνω ακινήτου, ελεύθερου από κάθε βάρος.</p>"
-            f"<p><b>{next(heading)} — ΤΟ ΤΙΜΗΜΑ.</b> Το συμφωνημένο τίμημα ανέρχεται στο ποσό των "
-            f"<b>{greek_amount(d.price)} €</b>, το οποίο "
+            f"<p>{heading('ΤΟ ΤΙΜΗΜΑ')} Το συμφωνημένο τίμημα ανέρχεται στο ποσό των "
+            f"<b>{amount}</b>, το οποίο "
             + word(d.sellers, "ο πωλητής δηλώνει ότι εισέπραξε", "η πωλήτρια δηλώνει ότι εισέπραξε",
                    "οι πωλητές δηλώνουν ότι εισέπραξαν")
             + " ολόκληρο μέσω τραπεζικής μεταφοράς πριν από την υπογραφή του παρόντος.</p>"
         )
     else:
         deal = (
-            f"<p><b>{next(heading)} — Η ΠΑΡΟΧΗ.</b> Με το παρόν "
+            f"<p>{heading('Η ΠΑΡΟΧΗ')} Με το παρόν "
             + word(d.sellers, "ο γονέας παραχωρεί", "η γονέας παραχωρεί", "οι γονείς παραχωρούν")
             + " λόγω γονικής παροχής "
             + word(d.buyers, "στο τέκνο", "στο τέκνο", "στα τέκνα")
@@ -651,13 +732,21 @@ def deed_html(d: DeedSpec) -> str:
         )
     deal += sections(extra["after_deal"])
     in_city, seat = CITY_FORMS[d.location]
+    if st.intro == "before_me":
+        intro = (
+            f"<p>{in_city[0].upper() + in_city[1:]} {when}, ενώπιον εμού (<b>{d.notary}</b>, συμβολαιογράφου "
+            f"με έδρα {seat}) εμφανίστηκαν οι παρακάτω συμβαλλόμενοι:</p>"
+        )
+    else:
+        intro = f"""<p>{in_city[0].upper() + in_city[1:]} {when}, στο γραφείο μου, εγώ,
+{gendered(d.notary, "ο", "η")} συμβολαιογράφος με έδρα {seat}, <b>{d.notary}</b>, βεβαιώνω ότι
+εμφανίστηκαν ενώπιόν μου οι παρακάτω συμβαλλόμενοι:</p>"""
+    closing = "<b>ΤΕΛΕΥΤΑΙΟ — ΔΗΛΩΣΕΙΣ.</b>" if st.heading == "ordinal" else heading("ΔΗΛΩΣΕΙΣ")
     return f"""
 <p class="banner">ΔΕΙΓΜΑ — ΠΛΑΣΤΑ ΣΤΟΙΧΕΙΑ / SAMPLE — FICTIONAL DATA</p>
 <h1>{title}</h1>
 <p class="c">Αριθμός {d.registry_number}</p>
-<p>{in_city[0].upper() + in_city[1:]} {when}, στο γραφείο μου, εγώ,
-{gendered(d.notary, "ο", "η")} συμβολαιογράφος με έδρα {seat}, <b>{d.notary}</b>, βεβαιώνω ότι
-εμφανίστηκαν ενώπιόν μου οι παρακάτω συμβαλλόμενοι:</p>
+{intro}
 <p><b>ΑΠΟ ΤΗ ΜΙΑ ΠΛΕΥΡΑ, {side_a}:</b></p>{sellers}
 <p><b>ΑΠΟ ΤΗΝ ΑΛΛΗ ΠΛΕΥΡΑ, {side_b}:</b></p>{buyers}
 {extra["parties"]}
@@ -665,7 +754,7 @@ def deed_html(d: DeedSpec) -> str:
 με το οποίο συμφώνησαν τα εξής:</p>
 {prop}
 {deal}
-<p><b>ΤΕΛΕΥΤΑΙΟ — ΔΗΛΩΣΕΙΣ.</b> Οι συμβαλλόμενοι δηλώνουν ότι έχουν καταβληθεί όλοι οι
+<p>{closing} Οι συμβαλλόμενοι δηλώνουν ότι έχουν καταβληθεί όλοι οι
 φόροι και τα τέλη που αφορούν το ακίνητο και ότι προσκομίστηκαν όλα τα νόμιμα
 δικαιολογητικά, τα οποία προσαρτώνται στο παρόν.</p>
 <p>Σε πίστωση των ανωτέρω συντάχθηκε το παρόν, το οποίο αφού αναγνώστηκε καθαρά και
@@ -715,21 +804,100 @@ def render(spec: DeedSpec, pdf_path: Path) -> None:
     print(f"Wrote {pdf_path.relative_to(ROOT.parent)} (+ .json)")
 
 
-def scan(src: Path, dest: Path, rng: random.Random) -> None:
-    """Turn a clean PDF into an image-only one that looks like a cheap office scan."""
+def load_font(size: int) -> ImageFont.ImageFont:
+    """A font with Greek letters if one is installed, else Pillow's built-in one."""
+    for name in ("arial.ttf", "DejaVuSans.ttf", "LiberationSans-Regular.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default(size)
+
+
+def ink(img: Image.Image, mark: Image.Image, at: tuple[int, int]) -> None:
+    """Print a mark (dark on white) onto the page, like ink: the darker of the two wins."""
+    x, y = at
+    box = (x, y, x + mark.width, y + mark.height)
+    img.paste(ImageChops.darker(img.crop(box), mark), box)
+
+
+def stamp(rng: random.Random, radius: int) -> Image.Image:
+    """A round notary stamp, slightly rotated."""
+    size = radius * 2 + 8
+    mark = Image.new("L", (size, size), 255)
+    draw = ImageDraw.Draw(mark)
+    shade = rng.randint(60, 110)
+    c = size // 2
+    for r, width in ((radius, 4), (radius - 12, 2)):
+        draw.ellipse((c - r, c - r, c + r, c + r), outline=shade, width=width)
+    font = load_font(max(10, radius // 6))
+    for text, dy in (("ΣΥΜΒΟΛΑΙΟΓΡΑΦΟΣ", -radius // 4), ("ΔΟΚΙΜΩΝ", radius // 8)):
+        draw.text((c, c + dy), text, fill=shade, font=font, anchor="mm")
+    return mark.rotate(rng.uniform(-25, 25), fillcolor=255)
+
+
+def signature(rng: random.Random, width: int) -> Image.Image:
+    """A scribbled signature: a wobbly pen line."""
+    height = width // 3
+    mark = Image.new("L", (width, height), 255)
+    x, y, points = 4.0, height / 2, []
+    while x < width - 4:
+        points.append((x, y))
+        x += rng.uniform(3, 9)
+        y = min(height - 4, max(4, y + rng.uniform(-height / 4, height / 4)))
+    ImageDraw.Draw(mark).line(points, fill=rng.randint(20, 70), width=rng.randint(2, 3), joint="curve")
+    return mark
+
+
+def margin_note(rng: random.Random, size: int) -> Image.Image:
+    """A handwritten-looking number in the margin: a look-alike value that belongs to nothing."""
+    text = rng.choice([f"{rng.randint(100, 9999)}/{rng.randint(1, 12)}", f"Αρ. {rng.randint(1000, 99999)}",
+                       f"{rng.randint(10, 99)}.{rng.randint(100, 999)}"])
+    font = load_font(size)
+    left, top, right, bottom = font.getbbox(text)
+    mark = Image.new("L", (right - left + 10, bottom - top + 10), 255)
+    ImageDraw.Draw(mark).text((5 - left, 5 - top), text, fill=rng.randint(40, 90), font=font)
+    return mark.rotate(rng.uniform(-10, 10), expand=True, fillcolor=255)
+
+
+def office_marks(img: Image.Image, rng: random.Random, first: bool, last: bool) -> None:
+    """What real scanned deeds carry on top of the text."""
+    w, h = img.size
+    if last:
+        ink(img, stamp(rng, w // 11), (int(w * rng.uniform(0.55, 0.72)), int(h * rng.uniform(0.70, 0.80))))
+        for i in range(rng.randint(2, 4)):
+            ink(img, signature(rng, w // 5), (int(w * rng.uniform(0.08, 0.6)), int(h * (0.82 + 0.035 * i))))
+    if rng.random() < 0.5:  # a stamp right over the text
+        ink(img, stamp(rng, w // 12), (int(w * rng.uniform(0.15, 0.65)), int(h * rng.uniform(0.25, 0.6))))
+    if first:  # in the top margin, where it hides no text
+        ink(img, margin_note(rng, h // 60), (int(w * rng.uniform(0.55, 0.75)), int(h * rng.uniform(0.012, 0.025))))
+    if rng.random() < 0.6:  # a photocopier streak
+        x = rng.randint(w // 10, w - w // 10)
+        ImageDraw.Draw(img).line((x, 0, x + rng.randint(-6, 6), h), fill=rng.randint(150, 200), width=rng.randint(2, 4))
+
+
+def scan(src: Path, dest: Path, rng: random.Random, harsh: bool = False) -> None:
+    """Turn a clean PDF into an image-only one that looks like a cheap office scan.
+
+    harsh adds stamps, signatures, a margin note and streaks, and degrades the
+    image more: lower resolution, more rotation, blur, grain and compression.
+    """
     pages = []
     with fitz.open(src) as doc:
-        for page in doc:
-            pix = page.get_pixmap(dpi=130, colorspace=fitz.csGRAY)
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(dpi=110 if harsh else 130, colorspace=fitz.csGRAY)
             img = Image.frombytes("L", (pix.width, pix.height), pix.samples)
-            img = img.rotate(rng.uniform(-1.8, 1.8), resample=Image.BICUBIC, expand=True, fillcolor=255)
-            img = img.filter(ImageFilter.GaussianBlur(rng.uniform(0.4, 0.9)))
+            if harsh:
+                office_marks(img, rng, first=i == 0, last=i == doc.page_count - 1)
+            turn = 3.5 if harsh else 1.8
+            img = img.rotate(rng.uniform(-turn, turn), resample=Image.BICUBIC, expand=True, fillcolor=255)
+            img = img.filter(ImageFilter.GaussianBlur(rng.uniform(0.6, 1.2) if harsh else rng.uniform(0.4, 0.9)))
             grain = Image.effect_noise(img.size, rng.uniform(10, 22))
-            img = Image.blend(img, grain, 0.12)
-            img = ImageEnhance.Contrast(img).enhance(rng.uniform(0.75, 1.0))
+            img = Image.blend(img, grain, 0.18 if harsh else 0.12)
+            img = ImageEnhance.Contrast(img).enhance(rng.uniform(0.6, 0.9) if harsh else rng.uniform(0.75, 1.0))
             img = ImageEnhance.Brightness(img).enhance(rng.uniform(0.92, 1.05))
             buffer = io.BytesIO()
-            img.save(buffer, "JPEG", quality=rng.randint(40, 60))
+            img.save(buffer, "JPEG", quality=rng.randint(30, 45) if harsh else rng.randint(40, 60))
             pages.append((page.rect, buffer.getvalue()))
 
     with fitz.open() as out:
@@ -747,6 +915,11 @@ def main() -> None:
                         help="Also write scan-like, image-only copies to samples/dataset_scanned/")
     parser.add_argument("--long", type=int, default=0,
                         help="Also generate N long deeds full of look-alike values in samples/dataset_long/")
+    parser.add_argument("--varied", type=int, default=0,
+                        help="Also generate N long deeds in varied wording and layout in samples/dataset_varied/")
+    parser.add_argument("--harsh", action="store_true",
+                        help="Also write harsh scans (stamps, signatures, notes) of the varied deeds "
+                             "to samples/dataset_varied_scanned/")
     parser.add_argument("--seed", type=int, default=7, help="Random seed, so the dataset is reproducible")
     args = parser.parse_args()
 
@@ -771,6 +944,20 @@ def main() -> None:
         rng = random.Random(args.seed + 1)  # a different set of deeds from samples/dataset
         for i in range(1, args.long + 1):
             render(add_distractors(random_deed(rng), rng), out / f"deed_{i:02d}.pdf")
+
+    if args.varied:
+        out = ROOT / "dataset_varied"
+        out.mkdir(exist_ok=True)
+        rng = random.Random(args.seed + 2)
+        for i in range(1, args.varied + 1):
+            render(vary(add_distractors(random_deed(rng), rng), rng), out / f"deed_{i:02d}.pdf")
+
+        if args.harsh:
+            scanned = ROOT / "dataset_varied_scanned"
+            scanned.mkdir(exist_ok=True)
+            rng = random.Random(args.seed + 3)
+            for i in range(1, args.varied + 1):
+                scan(out / f"deed_{i:02d}.pdf", scanned / f"deed_{i:02d}.pdf", rng, harsh=True)
 
 
 if __name__ == "__main__":

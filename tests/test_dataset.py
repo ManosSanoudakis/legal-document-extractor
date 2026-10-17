@@ -14,7 +14,11 @@ TRUTH_FILES = [
     SAMPLES / "sample_deed.json",
     *sorted((SAMPLES / "dataset").glob("*.json")),
     *sorted((SAMPLES / "dataset_long").glob("*.json")),
+    *sorted((SAMPLES / "dataset_varied").glob("*.json")),
 ]
+LONG_PDFS = sorted((SAMPLES / "dataset_long").glob("*.pdf")) + sorted((SAMPLES / "dataset_varied").glob("*.pdf"))
+# (scanned folder, the clean folder it was made from)
+SCAN_SETS = [("dataset_scanned", "dataset"), ("dataset_varied_scanned", "dataset_varied")]
 
 
 @pytest.mark.parametrize("truth_path", TRUTH_FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
@@ -37,9 +41,13 @@ def test_dataset_exists():
     assert len(TRUTH_FILES) > 1, "Run: python samples/make_sample_deed.py --dataset 10"
 
 
-@pytest.mark.parametrize("scanned", sorted((SAMPLES / "dataset_scanned").glob("*.pdf")), ids=lambda p: p.stem)
+@pytest.mark.parametrize(
+    "scanned",
+    [pdf for folder, _ in SCAN_SETS for pdf in sorted((SAMPLES / folder).glob("*.pdf"))],
+    ids=lambda p: f"{p.parent.name}/{p.stem}",
+)
 def test_scanned_copies_share_ground_truth(scanned):
-    clean = SAMPLES / "dataset" / scanned.name
+    clean = SAMPLES / dict(SCAN_SETS)[scanned.parent.name] / scanned.name
     def truth(pdf):
         return pdf.with_suffix(".json").read_text(encoding="utf-8")
 
@@ -49,7 +57,7 @@ def test_scanned_copies_share_ground_truth(scanned):
         assert all(page.get_text().strip() == "" for page in doc), "scans must have no text layer"
 
 
-@pytest.mark.parametrize("pdf", sorted((SAMPLES / "dataset_long").glob("*.pdf")), ids=lambda p: p.stem)
+@pytest.mark.parametrize("pdf", LONG_PDFS, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_long_deeds_hold_look_alikes_but_never_a_valid_afm(pdf):
     """Long deeds must be long, carry other tax IDs and ΚΑΕΚ, and still contain no real ΑΦΜ."""
     import re
@@ -58,7 +66,7 @@ def test_long_deeds_hold_look_alikes_but_never_a_valid_afm(pdf):
     with fitz.open(pdf) as doc:
         assert doc.page_count >= 5
         text = " ".join(" ".join(page.get_text() for page in doc).split())
-    afms = set(re.findall(r"Α\.Φ\.Μ\. (\d{9})", text))
+    afms = set(re.findall(r"Α\.Φ\.Μ\.:? (\d{9})", text))
     real = {p["tax_id"] for p in truth["sellers"] + truth["buyers"] + truth["legal_representatives"]}
     assert afms > real, "expected tax IDs of people who are not parties"
     assert not any(afm_is_valid(a) for a in afms)

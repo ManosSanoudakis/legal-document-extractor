@@ -1,0 +1,38 @@
+{
+  "notary": {
+    "name": "Δημήτριος Παράδειγμα",
+    "location": "Πάτρα",
+    "registry_number": "16.019"
+  },
+  "sellers": [
+    {
+      "full_name": "Μαρία Υποθετική του Ιωάννη",
+      "tax_id": "765905274",
+      "id_document": "ΑΗ 759283",
+      "address": "Οδός Υποθέσεων 119, Πάτρα"
+    }
+  ],
+  "buyers": [
+    {
+      "full_name": "Χρήστος Πλασματικός του Δημητρίου",
+      "tax_id": "615061691",
+      "id_document": "ΑΚ 281513",
+      "address": "Οδός Πλασματικής 7, Αθήνα"
+    }
+  ],
+  "legal_representatives": [],
+  "property": {
+    "type": "μονοκατοικία",
+    "address": "Οδός Ανύπαρκτης 97, Πάτρα",
+    "municipal_unit": "Δημοτική Ενότητα Πατρέων",
+    "floor": null,
+    "area_sqm": 86.11,
+    "kaek": "996548806570/0/5",
+    "building_permit": "3180/1990 του Πολεοδομικού Γραφείου Δοκιμών"
+  },
+  "transaction": {
+    "deed_type": "sale",
+    "price": 164500,
+    "date": "2022-03-14"
+  }
+}

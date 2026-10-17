@@ -113,18 +113,24 @@ def pdf_to_images(
     return paths
 
 
-# A page with less text than this is treated as scanned (a watermark alone is not a text layer)
-MIN_PAGE_TEXT = 50
+# A page with less text than this is treated as scanned. Repeated lines (headers,
+# watermarks) are not counted, so a short last page with only a signature line still has text.
+MIN_PAGE_TEXT = 15
 
 
 def pdf_page_texts(pdf_path: str) -> list[str]:
     """The text layer of each page, whitespace collapsed; "" for a scanned page.
 
     A digital PDF carries its exact characters, so numbers read from the text
-    cannot be misread the way they can from a page image.
+    cannot be misread the way they can from a page image. Lines repeated on
+    every page of a multi-page PDF (headers, footers, watermarks) are dropped:
+    they would otherwise land in the middle of a value that runs onto the next
+    page, e.g. "Λεωφόρος <watermark> Δοκιμών 95".
     """
     with fitz.open(pdf_path) as doc:
-        texts = [" ".join(page.get_text().split()) for page in doc]
+        pages = [[" ".join(line.split()) for line in page.get_text().splitlines()] for page in doc]
+    furniture = set.intersection(*(set(lines) for lines in pages)) if len(pages) > 1 else set()
+    texts = [" ".join(line for line in lines if line and line not in furniture) for lines in pages]
     return [t if len(t) >= MIN_PAGE_TEXT else "" for t in texts]
 
 # ---------------------------------------------------------------------------
