@@ -6,8 +6,8 @@ correct values (generate them with samples/make_sample_deed.py --dataset N).
 
 Usage:
     set GEMINI_API_KEY=your-key     # macOS/Linux: export GEMINI_API_KEY=your-key
-    python benchmark.py                                 # all models, samples/dataset
-    python benchmark.py --models gemini-3.8-flash --dataset samples/dataset
+    python -m deed_extractor.benchmark                  # all models, samples/dataset
+    python -m deed_extractor.benchmark --models gemini-3.8-flash --dataset samples/dataset
 """
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
-from evaluate import run_evaluation
-from extractor import MODELS
+from .evaluate import run_evaluation
+from .extractor import MODELS
 
 logger = logging.getLogger(__name__)
 

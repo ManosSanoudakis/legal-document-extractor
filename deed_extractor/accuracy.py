@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from validators import LOOKALIKES, digits, norm_text
+from .validators import LOOKALIKES, digits, norm_text
 
 SCALAR_FIELDS: dict[str, str] = {
     "notary.name": "name",

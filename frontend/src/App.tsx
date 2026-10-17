@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ApiError, createJob, evaluate, getConfig, getJobResult, recheck, waitForJob } from "./api";
+import { ApiError, evaluate, extract, getConfig, getDemo, recheck } from "./api";
 import { BatchView, STAGE_LABELS } from "./components/BatchView";
 import { DocumentCard } from "./components/DocumentCard";
 import { EvaluationView } from "./components/EvaluationView";
@@ -52,19 +52,6 @@ function useElapsed(startedAt: number | null): number {
 
 type View = "extract" | "batch" | "history" | "evaluate";
 
-/** Extract one document as a background job, reporting its stage, and return the result. */
-async function extractInBackground(
-  doc: DocumentChoice,
-  model: string,
-  apiKey: string,
-  onStage: (doc: JobDocument) => void,
-): Promise<ExtractionResult> {
-  const job = await waitForJob(await createJob(doc, model, apiKey), (j) => onStage(j.documents[0]));
-  const [result] = job.documents;
-  if (result.status === "error") throw new Error(result.error ?? "Extraction failed");
-  return getJobResult(job.id, result.id);
-}
-
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -77,12 +64,25 @@ export default function App() {
   const extraction = useTask<ExtractionResult>();
   const evaluation = useTask<EvaluationReport>();
 
+  /** A demo deed opens on its saved answer at once: no key, no model call. */
+  function showDemoAnswer(next: DocumentChoice | null) {
+    if (next?.kind !== "demo") return;
+    setStage(null);
+    extraction.run(() => getDemo(next.demo.id));
+  }
+
   useEffect(() => {
     getConfig()
       .then((c) => {
         setConfig(c);
         setModel(c.models[0]);
-        setDoc(c.sample_available ? { kind: "sample" } : null);
+        const first: DocumentChoice | null = c.demos.length
+          ? { kind: "demo", demo: c.demos[0] }
+          : c.sample_available
+            ? { kind: "sample" }
+            : null;
+        setDoc(first);
+        showDemoAnswer(first);
       })
       .catch((err: Error) => setConfigError(err.message));
   }, []);
@@ -98,13 +98,15 @@ export default function App() {
     setPreviewPage(null);
     extraction.reset();
     evaluation.reset();
+    showDemoAnswer(next);
   }
 
   const missing = !doc
-    ? "Choose the sample deed or upload a PDF."
+    ? "Choose a demo deed, the sample deed or upload a PDF."
     : !apiKey.trim()
       ? "Enter your Gemini API key to continue."
       : null;
+  const demoShown = doc?.kind === "demo" && extraction.task.status === "done";
 
   return (
     <div className="min-h-screen">
@@ -162,12 +164,16 @@ export default function App() {
                     }
                     label={`Extract with ${model.replace("gemini-", "")}`}
                     runningLabel={stage ? `${STAGE_LABELS[stage.status]}…` : "Starting…"}
-                    missing={missing}
+                    missing={
+                      demoShown && !apiKey.trim()
+                        ? "No API key needed to look around. Enter one to extract this deed yourself or take a second look."
+                        : missing
+                    }
                     task={extraction.task}
                     onRun={() => {
                       if (!doc) return;
                       setStage(null);
-                      extraction.run(() => extractInBackground(doc, model, apiKey.trim(), setStage));
+                      extraction.run(() => extract(doc, model, apiKey.trim(), setStage));
                     }}
                     render={(data) => (
                       <ResultsView
@@ -175,7 +181,7 @@ export default function App() {
                         onShowPage={showPage}
                         onRecheck={
                           doc && apiKey.trim()
-                            ? (deed, fields) => recheck(doc, data._meta?.model ?? model, apiKey.trim(), deed, fields)
+                            ? (deed, fields) => recheck(doc, data.meta.model, apiKey.trim(), deed, fields)
                             : undefined
                         }
                       />

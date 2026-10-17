@@ -1,8 +1,10 @@
+import json
 import time
 
 import pytest
 
-from history import History
+from deed_extractor.history import History
+from deed_extractor.schema import ExtractionResult
 
 
 @pytest.fixture
@@ -10,16 +12,16 @@ def history(tmp_path):
     return History(tmp_path / "h.sqlite3")
 
 
-def result(price: int = 100) -> dict:
-    return {
-        "transaction": {"deed_type": "sale", "price": price, "date": "2024-01-01"},
-        "_validation": [
-            {"field": "sellers[0].tax_id", "severity": "error"},
-            {"field": "sellers[0].tax_id", "severity": "warning"},
-            {"field": "property.kaek", "severity": "warning"},
+def result(price: int = 100) -> ExtractionResult:
+    return ExtractionResult(
+        deed={"transaction": {"deed_type": "sale", "price": price, "date": "2024-01-01"}},
+        meta={"model": "m"},
+        validation=[
+            {"field": "sellers[0].tax_id", "message": "a", "severity": "error"},
+            {"field": "sellers[0].tax_id", "message": "b", "severity": "warning"},
+            {"field": "property.kaek", "message": "c", "severity": "warning"},
         ],
-        "_meta": {"model": "m"},
-    }
+    )
 
 
 def test_add_list_get(history):
@@ -32,7 +34,21 @@ def test_add_list_get(history):
                                     "flags": 3, "errors": 1, "to_check": 2}  # 2 distinct fields
     record = history.get(first)
     assert record["filename"] == "a.pdf" and record["edited"] is None and record["reviewed"] == []
+    assert record["result"].deed["transaction"]["price"] == 1
+    assert record["result"].meta.history_id == first  # so the UI can save edits
     assert history.get("nope") is None
+
+
+def test_results_saved_in_the_old_shape_still_load(history):
+    """Before ExtractionResult, the deed's keys were at the top level, next to _meta and _validation."""
+    doc = history.add("a.pdf", "m", result())
+    old = {"transaction": {"price": 5}, "_meta": {"pages": 2}, "_error": "bad JSON",
+           "_validation": [{"field": "property.kaek", "value": None, "message": "x", "severity": "warning"}]}
+    history._run("UPDATE documents SET result = ? WHERE id = ?", (json.dumps(old), doc))
+    loaded = history.get(doc)["result"]
+    assert loaded.deed == {"transaction": {"price": 5}}
+    assert loaded.meta.model == "m" and loaded.meta.pages == 2 and loaded.error == "bad JSON"
+    assert history.list()[0]["summary"]["to_check"] == 1
 
 
 def test_corrections_and_review_are_saved(history):

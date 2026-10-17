@@ -2,7 +2,7 @@ services:
   api:
     build: .
     environment:
-      # Optional comma-separated model list; empty uses the defaults in extractor.py
+      # Optional comma-separated model list; empty uses the defaults in deed_extractor/extractor.py
       - GEMINI_MODELS=${GEMINI_MODELS:-}
       # History (extracted results, never PDFs) lives in the volume below
       - DATA_DIR=/data

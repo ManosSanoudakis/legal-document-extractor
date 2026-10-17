@@ -5,11 +5,13 @@ Take the README screenshots by driving the running app in a browser.
     docker compose up -d
     python scripts/screenshots.py
 
-With GEMINI_API_KEY set, the screenshots show a real extraction and model
-evaluation of the sample deed. Without it, /api/extract is answered with demo
-data built from the sample's known answers (labelled "demo" in the UI), and
-the evaluation screenshot is skipped, so no model results are invented.
-The batch screenshot uses five deeds from samples/dataset.
+The extraction screenshots show the first demo deed: a real answer Gemini
+gave in a benchmark run, saved in samples/demo/, so no API key is needed.
+With GEMINI_API_KEY set, the batch screenshot is a real extraction of five
+deeds from samples/dataset, and a model evaluation of the demo deed is added.
+Without it, the batch job is answered with the demo's saved result for each
+file, and the evaluation screenshot is skipped, so no model results are
+invented.
 
 Uses the installed Google Chrome (or Edge with --browser msedge), so no
 browser download is needed.
@@ -20,62 +22,28 @@ import argparse
 import json
 import os
 import re
-import sys
 from pathlib import Path
 
-import fitz
 from playwright.sync_api import Page, sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-from validators import digits, norm_text, validate_deed  # noqa: E402
-
 OUT = ROOT / "docs" / "screenshots"
-SAMPLE = ROOT / "samples" / "sample_deed.pdf"
+DEMO = json.loads((ROOT / "samples" / "demo" / "demo.json").read_text(encoding="utf-8"))[0]
+DEMO_RESULT = (ROOT / "samples" / "demo" / f"{DEMO['id']}.json").read_text(encoding="utf-8")
 
 
-def demo_result() -> dict:
-    """The sample's correct answers, with sources taken from the PDF's own text."""
-    truth = json.loads(SAMPLE.with_suffix(".json").read_text(encoding="utf-8"))
-    with fitz.open(SAMPLE) as doc:
-        lines = [(n, line) for n, page in enumerate(doc, start=1) for line in page.get_text().splitlines()]
-
-    def find(value: object, numeric: bool) -> tuple[int, str] | None:
-        for n, line in lines:
-            hit = digits(value) in digits(line) if numeric else norm_text(value)[:20] in norm_text(line)
-            if hit and (digits(value) if numeric else norm_text(value)):
-                return n, line.strip()
-        return None
-
-    sources = []
-    for section in ("notary", "property"):
-        for key, value in truth[section].items():
-            if isinstance(value, str) and (hit := find(value, key in {"kaek", "registry_number"})):
-                sources.append({"field": f"{section}.{key}", "page": hit[0], "quote": hit[1]})
-    for role in ("sellers", "buyers", "legal_representatives"):
-        for i, person in enumerate(truth[role]):
-            for key in ("full_name", "tax_id"):
-                if person.get(key) and (hit := find(person[key], key == "tax_id")):
-                    sources.append({"field": f"{role}[{i}].{key}", "page": hit[0], "quote": hit[1]})
-
-    result = {**truth, "sources": sources}
-    result["_validation"] = validate_deed(result)
-    result["_meta"] = {"model": "demo (no API call)", "provider": "demo", "pages": len(fitz.open(SAMPLE)),
-                       "elapsed_seconds": 0}
-    return result
-
-
-def demo_job(body: bytes, result: dict) -> dict:
-    """A finished job with one document per uploaded file (or the sample), all with the demo result."""
-    names = re.findall(rb'filename="([^"]+)"', body) or [SAMPLE.name.encode()]
-    txn, issues = result["transaction"], result["_validation"]
+def demo_job(body: bytes) -> dict:
+    """A finished job with one document per uploaded file, each with the demo's saved result."""
+    result = json.loads(DEMO_RESULT)
+    names = re.findall(rb'filename="([^"]+)"', body)
+    txn, issues = result["deed"]["transaction"], result["validation"]
     summary = {"deed_type": txn["deed_type"], "price": txn["price"], "date": txn["date"], "flags": len(issues),
                "errors": sum(1 for i in issues if i["severity"] == "error")}
     return {
-        "id": "demo", "model": "demo", "status": "done",
+        "id": "demo", "kind": "extract", "model": result["meta"]["model"], "status": "done",
         "documents": [
             {"id": f"d{i}", "filename": name.decode(), "status": "done", "error": None,
-             "elapsed_seconds": 0, "summary": summary}
+             "elapsed_seconds": result["meta"]["elapsed_seconds"], "summary": summary}
             for i, name in enumerate(names)
         ],
     }
@@ -98,17 +66,15 @@ def main() -> None:
         browser = pw.chromium.launch(channel=args.browser)
         page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
         if not key:
-            result = demo_result()
-            demo = json.dumps(result, ensure_ascii=False)
             page.route("**/api/jobs", lambda route: route.fulfill(
-                content_type="application/json", body=json.dumps(demo_job(route.request.post_data_buffer, result))))
+                content_type="application/json", body=json.dumps(demo_job(route.request.post_data_buffer))))
             page.route("**/api/jobs/demo/documents/*",
-                       lambda route: route.fulfill(content_type="application/json", body=demo))
+                       lambda route: route.fulfill(content_type="application/json", body=DEMO_RESULT))
 
+        # The first demo deed opens on its saved answer, with no key
         page.goto(args.url)
-        page.get_by_label("Gemini API key").fill(key or "demo-key")
-        page.get_by_role("button", name="Extract with").click()
-        page.get_by_role("tab", name="Sources").wait_for(timeout=180_000)
+        page.get_by_role("radio", name=DEMO["title"]).wait_for(timeout=30_000)
+        page.get_by_role("tab", name="Sources").wait_for(timeout=30_000)
         page.wait_for_timeout(1500)  # let the PDF preview render
 
         page.screenshot(path=OUT / "extraction.png", full_page=True)
@@ -123,6 +89,8 @@ def main() -> None:
         results_card(page).screenshot(path=OUT / "editing.png")
         print("Wrote docs/screenshots/editing.png")
 
+        page.get_by_role("button", name="Done editing").click()
+        page.get_by_label("Gemini API key").fill(key or "demo-key")
         page.get_by_role("tab", name="Batch").click()
         deeds = sorted((ROOT / "samples" / "dataset").glob("*.pdf"))[:5]
         page.locator("input[type=file][multiple]").set_input_files(deeds)
@@ -138,7 +106,7 @@ def main() -> None:
             results_card(page).screenshot(path=OUT / "evaluation.png")
             print("Wrote docs/screenshots/evaluation.png")
         else:
-            print("Skipped evaluation.png: set GEMINI_API_KEY to capture a real model comparison")
+            print("Skipped evaluation.png: set GEMINI_API_KEY to capture a real model comparison of the demo deed")
 
         browser.close()
 

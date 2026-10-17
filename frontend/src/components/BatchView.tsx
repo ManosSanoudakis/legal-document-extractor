@@ -1,8 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { createJob, exportBatch, getJobResult, recheck, waitForJob } from "../api";
-import { deedData } from "../deed";
 import { deedType, price } from "../format";
-import type { AppConfig, ExtractionResult, Job, JobDocument } from "../types";
+import type { AppConfig, Deed, ExtractionResult, Job, JobDocument } from "../types";
 import { ResultsView } from "./ResultsView";
 import { Alert, Badge, Button, Cell, Icon, Spinner, Table, cx } from "./ui";
 
@@ -24,7 +23,7 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
   const [open, setOpen] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   // The user's corrections, by document id; the export uses them over the raw results
-  const edits = useRef<Record<string, ExtractionResult>>({});
+  const edits = useRef<Record<string, Deed>>({});
   const checked = useRef<Record<string, string[]>>({});
 
   const running = job?.status === "running";
@@ -54,7 +53,7 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
     checked.current = {};
     setJobFiles(files);
     try {
-      const created = await createJob(files, model, apiKey);
+      const created = await createJob(files, apiKey, { task: "extract", model });
       await waitForJob(created, setJob);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start the batch");
@@ -86,7 +85,7 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
       const done = job.documents.filter((d) => d.status === "done");
       const loaded = await Promise.all(done.map((d) => load(d)));
       await exportBatch(
-        done.map((d, i) => ({ name: d.filename, deed: deedData(edits.current[d.id] ?? loaded[i]!) })),
+        done.map((d, i) => ({ name: d.filename, deed: edits.current[d.id] ?? loaded[i]!.deed })),
         format,
       );
     } catch (err) {

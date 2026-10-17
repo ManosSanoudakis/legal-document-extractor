@@ -5,7 +5,7 @@ Every name, number and address is invented. Tax IDs (ΑΦΜ) are chosen to fail
 the official check-digit test, so they cannot belong to a real person.
 
 The JSON next to each PDF holds the values the extractor should return, which
-makes field-level accuracy measurable (see accuracy.py and benchmark.py).
+makes field-level accuracy measurable (see deed_extractor/accuracy.py and benchmark.py).
 
 Long deeds (--long) run to several pages and add the look-alike values real
 deeds are full of: previous owners, earlier deeds and their notaries, other
@@ -41,7 +41,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageFo
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent))
-from validators import afm_is_valid  # noqa: E402
+from deed_extractor.validators import afm_is_valid  # noqa: E402
 
 GREEK_MONTHS = [
     "Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου", "Ιουνίου",

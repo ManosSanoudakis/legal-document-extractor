@@ -1,11 +1,16 @@
 """
-Background extraction jobs.
+Background jobs: all the long-running work (extraction, model evaluation,
+second look).
 
-A job is one or more PDFs extracted with the same model and API key. It runs
-in a worker thread, one document at a time (free-tier rate limits are per
-minute and per day), while the browser polls its progress. Nothing is
-written to disk here: a PDF's bytes are dropped as soon as it is processed,
-and the API key once the job ends.
+A job is one task (e.g. "extract with this model and key") applied to one or
+more PDFs. It runs in a worker thread, one document at a time (free-tier rate
+limits are per minute and per day), while the browser polls its progress.
+Nothing is written to disk here: a PDF's bytes are dropped as soon as it is
+processed, and the task, which holds the API key, once the job ends.
+
+Jobs live in this process's memory, which suits one server: a restart loses
+running jobs, and several API processes would not see each other's. Running
+more than one would mean a persistent queue and separate workers.
 
 If Gemini rejects the key or the quota runs out, the rest of the job is
 stopped rather than failing the same way once per document.
@@ -19,8 +24,11 @@ import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from typing import Any
 
 from google.genai import errors as genai_errors
+
+from .schema import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +54,22 @@ class JobDocument:
     data: bytes | None
     status: str = "queued"   # queued → reading → extracting → done | error
     error: str | None = None
-    result: dict | None = None
+    result: Any = None       # an ExtractionResult, evaluation report or RecheckResult
     started: float | None = None
     finished: float | None = None
     extra: dict = field(default_factory=dict)   # e.g. the history id, set by on_done
 
 
+# run(pdf_bytes, on_stage) -> result. It closes over the model and API key.
+Task = Callable[[bytes, Callable[[str], None]], Any]
+
+
 @dataclass
 class Job:
     id: str
-    model: str
-    api_key: str | None
+    kind: str                # "extract", "evaluate" or "recheck"
+    model: str | None
+    run: Task | None         # dropped when the job ends, and the API key with it
     documents: list[JobDocument]
     created: float = field(default_factory=time.time)
     finished: float | None = None
@@ -74,18 +87,15 @@ def describe_error(exc: Exception) -> tuple[str, bool]:
     return "Could not process this document.", False
 
 
-def summary(result: dict | None) -> dict | None:
-    """The few values the batch table shows; the full result is fetched separately."""
-    if result is None:
-        return None
-    txn = result.get("transaction") or {}
-    issues = result.get("_validation") or []
+def summary(deed: dict, issues: list) -> dict:
+    """The few values the batch and history tables show; the full result is fetched separately."""
+    txn = deed.get("transaction") or {}
     return {
         "deed_type": txn.get("deed_type"),
         "price": txn.get("price"),
         "date": txn.get("date"),
         "flags": len(issues),
-        "errors": sum(1 for i in issues if i.get("severity") == "error"),
+        "errors": sum(1 for i in issues if i.severity == "error"),
     }
 
 
@@ -94,18 +104,17 @@ class JobStore:
 
     def __init__(
         self,
-        run: Callable[..., dict],
         on_done: Callable[[Job, JobDocument], None] | None = None,
         workers: int = MAX_RUNNING_JOBS,
     ) -> None:
-        # run(pdf_bytes, api_key, model, on_stage) -> result; injected so tests need no model
-        self._run = run
         self._on_done = on_done
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="job")
 
-    def submit(self, files: list[tuple[str, bytes]], model: str, api_key: str) -> dict:
+    def submit(
+        self, files: list[tuple[str, bytes]], run: Task, kind: str = "extract", model: str | None = None,
+    ) -> dict:
         with self._lock:
             self._purge()
             active = sum(1 for j in self._jobs.values() if j.finished is None)
@@ -113,8 +122,9 @@ class JobStore:
                 raise JobLimitError
             job = Job(
                 id=uuid.uuid4().hex,
+                kind=kind,
                 model=model,
-                api_key=api_key,
+                run=run,
                 documents=[JobDocument(id=uuid.uuid4().hex, filename=name, data=data) for name, data in files],
             )
             self._jobs[job.id] = job
@@ -131,6 +141,7 @@ class JobStore:
             now = time.time()
             return {
                 "id": job.id,
+                "kind": job.kind,
                 "model": job.model,
                 "status": "running" if job.finished is None else "done",
                 "documents": [
@@ -140,14 +151,15 @@ class JobStore:
                         "status": d.status,
                         "error": d.error,
                         "elapsed_seconds": round((d.finished or now) - d.started, 1) if d.started else None,
-                        "summary": summary(d.result),
+                        "summary": summary(d.result.deed, d.result.validation)
+                        if isinstance(d.result, ExtractionResult) else None,
                         **d.extra,
                     }
                     for d in job.documents
                 ],
             }
 
-    def result(self, job_id: str, doc_id: str) -> dict | None:
+    def result(self, job_id: str, doc_id: str) -> Any:
         with self._lock:
             job = self._jobs.get(job_id)
             doc = next((d for d in job.documents if d.id == doc_id), None) if job else None
@@ -171,7 +183,7 @@ class JobStore:
                 continue
             self._set(doc, status="reading", started=time.time())
             try:
-                result = self._run(doc.data, job.api_key, job.model, lambda stage, d=doc: self._set(d, status=stage))
+                result = job.run(doc.data, lambda stage, d=doc: self._set(d, status=stage))
             except Exception as exc:  # noqa: BLE001 — every failure is reported on its document
                 message, fatal = describe_error(exc)
                 if not fatal:
@@ -189,4 +201,4 @@ class JobStore:
             self._set(doc, status="done", finished=time.time())
         with self._lock:
             job.finished = time.time()
-            job.api_key = None  # the key lives only as long as the job
+            job.run = None  # the task holds the API key, which lives only as long as the job

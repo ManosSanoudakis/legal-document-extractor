@@ -20,14 +20,15 @@ from typing import Annotated, Literal
 import fitz
 from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
-from google.genai import errors as genai_errors
 
-from evaluate import run_evaluation
-from export import batch_to_csv, batch_to_xlsx, to_csv, to_xlsx
-from extractor import MAX_RECHECK_FIELDS, GeminiExtractor, run_pipeline, run_recheck
-from history import History
-from jobs import Job, JobDocument, JobLimitError, JobStore
-from validators import validate_deed
+from . import demo
+from .evaluate import run_evaluation
+from .export import batch_to_csv, batch_to_xlsx, to_csv, to_xlsx
+from .extractor import MAX_RECHECK_FIELDS, GeminiExtractor, recheck_lines, run_pipeline, run_recheck
+from .history import History
+from .jobs import Job, JobDocument, JobLimitError, JobStore, Task
+from .schema import ExtractionResult
+from .validators import validate_deed
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,7 +36,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SAMPLE_PDF = Path(__file__).parent / "samples" / "sample_deed.pdf"
+ROOT = Path(__file__).resolve().parent.parent
+SAMPLE_PDF = ROOT / "samples" / "sample_deed.pdf"
 SAMPLE_TRUTH = SAMPLE_PDF.with_suffix(".json")  # correct answers for the sample
 MAX_FILE_MB = 20
 MAX_PAGES = 30
@@ -44,7 +46,7 @@ MAX_BATCH_FILES = 20
 app = FastAPI(
     title="Legal Document Extractor API",
     description="Extract structured data from Greek notarial deeds with Gemini vision.",
-    version="2.0.0",
+    version="3.0.0",
 )
 
 # ---------------------------------------------------------------------------
@@ -60,16 +62,8 @@ def require_api_key(api_key: str | None) -> str:
     return key
 
 
-def read_document(file: UploadFile | None, use_sample: bool) -> bytes:
-    """Return the PDF bytes to process, enforcing size and page limits."""
-    if use_sample:
-        if not SAMPLE_PDF.exists():
-            raise HTTPException(404, "Sample document is not available.")
-        return SAMPLE_PDF.read_bytes()
-
-    if file is None:
-        raise HTTPException(400, "Upload a PDF or set use_sample=true.")
-
+def read_upload(file: UploadFile) -> bytes:
+    """An uploaded PDF's bytes, enforcing size and page limits."""
     max_bytes = MAX_FILE_MB * 1024 * 1024
     data = file.file.read(max_bytes + 1)
     if len(data) > max_bytes:
@@ -87,6 +81,35 @@ def read_document(file: UploadFile | None, use_sample: bool) -> bytes:
     return data
 
 
+def read_documents(
+    files: list[UploadFile] | None, use_sample: bool, demo_id: str | None, many: bool,
+) -> tuple[list[tuple[str, bytes]], dict | None]:
+    """The PDFs to process as (file name, bytes), and their correct values when known (sample, demos)."""
+    if use_sample:
+        if not SAMPLE_PDF.exists():
+            raise HTTPException(404, "Sample document is not available.")
+        truth = json.loads(SAMPLE_TRUTH.read_text(encoding="utf-8")) if SAMPLE_TRUTH.exists() else None
+        return [(SAMPLE_PDF.name, SAMPLE_PDF.read_bytes())], truth
+    if demo_id:
+        path = demo.pdf_path(demo_id)
+        if path is None:
+            raise HTTPException(404, "No such demo deed.")
+        return [(path.name, path.read_bytes())], demo.truth(demo_id)
+
+    if not files:
+        raise HTTPException(400, "Upload a PDF, or set use_sample=true or demo.")
+    limit = MAX_BATCH_FILES if many else 1
+    if len(files) > limit:
+        raise HTTPException(413, f"At most {MAX_BATCH_FILES} files per batch." if many else "Send one PDF.")
+    documents = []
+    for f in files:
+        try:
+            documents.append((f.filename or "upload.pdf", read_upload(f)))
+        except HTTPException as exc:
+            raise HTTPException(exc.status_code, f"{f.filename}: {exc.detail}") from None
+    return documents, None
+
+
 @contextmanager
 def pdf_on_disk(data: bytes) -> Iterator[str]:
     """Write the PDF to a temp file that is always deleted afterwards."""
@@ -98,14 +121,55 @@ def pdf_on_disk(data: bytes) -> Iterator[str]:
         if Path(tmp.name).exists():
             os.unlink(tmp.name)
 
+# ---------------------------------------------------------------------------
+# Background tasks: each closes over its settings and the API key
+# ---------------------------------------------------------------------------
 
-def run_bytes(data: bytes, api_key: str, model: str, on_stage) -> dict:
-    """Extract one PDF given as bytes (used by background jobs)."""
-    with pdf_on_disk(data) as path:
-        return run_pipeline(pdf_path=path, api_key=api_key, model_name=model, on_stage=on_stage)
+def extract_task(api_key: str, model: str) -> Task:
+    def run(data: bytes, on_stage) -> ExtractionResult:
+        with pdf_on_disk(data) as path:
+            return run_pipeline(pdf_path=path, api_key=api_key, model_name=model, on_stage=on_stage)
+    return run
 
 
-DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
+def evaluate_task(api_key: str, truth: dict | None, filename: str) -> Task:
+    def run(data: bytes, on_stage) -> dict:
+        with pdf_on_disk(data) as path:
+            # If every model fails the same way (e.g. a rejected key), the job reports that error
+            report = run_evaluation(
+                pdf_path=path, api_key=api_key, truth=truth, on_stage=on_stage, raise_if_all_failed=True,
+            )
+        report["pdf"] = filename
+        return report
+    return run
+
+
+def recheck_task(api_key: str, model: str, deed: dict, fields: list[str]) -> Task:
+    def run(data: bytes, on_stage):
+        with pdf_on_disk(data) as path:
+            return run_recheck(
+                pdf_path=path, api_key=api_key, deed=deed, fields=fields, model_name=model, on_stage=on_stage,
+            )
+    return run
+
+
+def parse_recheck(deed: str | None, fields: str | None) -> tuple[dict, list[str]]:
+    try:
+        current, wanted = json.loads(deed or "{}"), json.loads(fields or "[]")
+    except json.JSONDecodeError:
+        raise HTTPException(422, "deed and fields must be JSON.") from None
+    if not isinstance(current, dict) or not isinstance(wanted, list) or not all(isinstance(f, str) for f in wanted):
+        raise HTTPException(422, "deed must be an object and fields a list of field paths.")
+    if not 1 <= len(wanted) <= MAX_RECHECK_FIELDS:
+        raise HTTPException(422, f"Re-check between 1 and {MAX_RECHECK_FIELDS} fields.")
+    try:
+        recheck_lines(current, wanted)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return current, wanted
+
+
+DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
 HISTORY = History(
     DATA_DIR / "history.sqlite3",
     retention_days=float(os.environ["HISTORY_RETENTION_DAYS"]) if os.environ.get("HISTORY_RETENTION_DAYS") else None,
@@ -114,22 +178,14 @@ HISTORY = History(
 
 def save_to_history(job: Job, doc: JobDocument) -> None:
     """Every finished extraction goes to history; its id travels with the result so edits can be saved."""
-    history_id = HISTORY.add(doc.filename, job.model, doc.result)
-    doc.result.setdefault("_meta", {})["history_id"] = history_id
+    if job.kind != "extract":
+        return
+    history_id = HISTORY.add(doc.filename, job.model or "", doc.result)
+    doc.result.meta.history_id = history_id
     doc.extra["history_id"] = history_id
 
 
-JOBS = JobStore(run=run_bytes, on_done=save_to_history)
-
-
-def gemini_error(exc: genai_errors.APIError) -> HTTPException:
-    """Translate a Gemini API error into a client-facing HTTP error."""
-    text = str(exc)
-    if exc.code in (401, 403) or "API_KEY_INVALID" in text or "API key not valid" in text:
-        return HTTPException(401, "Gemini rejected the API key.")
-    if exc.code == 429:
-        return HTTPException(429, "Gemini rate limit or quota reached. Try again later.")
-    return HTTPException(502, f"Gemini request failed ({exc.code}).")
+JOBS = JobStore(on_done=save_to_history)
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -145,74 +201,78 @@ def config() -> dict:
     return {
         "models": GeminiExtractor.MODELS,
         "sample_available": SAMPLE_PDF.exists(),
+        "demos": demo.demos(),
         "max_file_mb": MAX_FILE_MB,
         "max_pages": MAX_PAGES,
         "max_batch_files": MAX_BATCH_FILES,
     }
 
 
+def inline_pdf(path: Path) -> FileResponse:
+    # inline, so the browser shows it in the preview instead of downloading it
+    return FileResponse(path, media_type="application/pdf", filename=path.name, content_disposition_type="inline")
+
+
 @app.get("/api/sample")
 def sample() -> FileResponse:
     if not SAMPLE_PDF.exists():
         raise HTTPException(404, "Sample document is not available.")
-    # inline, so the browser shows it in the preview instead of downloading it
-    return FileResponse(
-        SAMPLE_PDF, media_type="application/pdf",
-        filename=SAMPLE_PDF.name, content_disposition_type="inline",
-    )
+    return inline_pdf(SAMPLE_PDF)
 
 
-@app.post("/api/extract")
-def extract(
-    x_gemini_key: Annotated[str | None, Header()] = None,
-    model: Annotated[str, Form()] = GeminiExtractor.MODELS[0],
-    use_sample: Annotated[bool, Form()] = False,
-    file: Annotated[UploadFile | None, File()] = None,
-) -> dict:
-    api_key = require_api_key(x_gemini_key)
-    if model not in GeminiExtractor.MODELS:
-        raise HTTPException(400, f"Unknown model '{model}'.")
-    data = read_document(file, use_sample)
+@app.get("/api/demo/{demo_id}")
+def demo_result(demo_id: str) -> ExtractionResult:
+    """A saved answer for a demo deed: no API key, no model call."""
+    result = demo.result(demo_id)
+    if result is None:
+        raise HTTPException(404, "No such demo deed.")
+    return result
 
-    logger.info("Extraction started — model=%s sample=%s", model, use_sample)
-    try:
-        with pdf_on_disk(data) as path:
-            return run_pipeline(pdf_path=path, api_key=api_key, model_name=model)
-    except genai_errors.APIError as exc:
-        logger.warning("Gemini error during extraction: %s", exc.code)
-        raise gemini_error(exc) from None
+
+@app.get("/api/demo/{demo_id}/pdf")
+def demo_pdf(demo_id: str) -> FileResponse:
+    path = demo.pdf_path(demo_id)
+    if path is None:
+        raise HTTPException(404, "No such demo deed.")
+    return inline_pdf(path)
 
 
 @app.post("/api/jobs", status_code=202)
 def create_job(
     x_gemini_key: Annotated[str | None, Header()] = None,
+    task: Annotated[Literal["extract", "evaluate", "recheck"], Form()] = "extract",
     model: Annotated[str, Form()] = GeminiExtractor.MODELS[0],
     use_sample: Annotated[bool, Form()] = False,
+    demo_id: Annotated[str | None, Form(alias="demo")] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
+    deed: Annotated[str | None, Form()] = None,
+    fields: Annotated[str | None, Form()] = None,
 ) -> dict:
-    """Extract one or more PDFs in the background; poll GET /api/jobs/{id} for progress."""
+    """Start work that takes a while; poll GET /api/jobs/{id} for progress.
+
+    - extract: one or more PDFs with one model. Each result is saved to history.
+    - evaluate: one PDF with every model, compared (and scored, for the sample and demo deeds).
+    - recheck: one PDF, with `deed` and `fields` (JSON): those fields read again.
+    """
     api_key = require_api_key(x_gemini_key)
-    if model not in GeminiExtractor.MODELS:
+    if task != "evaluate" and model not in GeminiExtractor.MODELS:
         raise HTTPException(400, f"Unknown model '{model}'.")
-    if use_sample:
-        documents = [(SAMPLE_PDF.name, read_document(None, use_sample=True))]
+    if task == "recheck":
+        current, wanted = parse_recheck(deed, fields)
+    documents, truth = read_documents(files, use_sample, demo_id, many=task == "extract")
+
+    if task == "extract":
+        run = extract_task(api_key, model)
+    elif task == "evaluate":
+        run, model = evaluate_task(api_key, truth, documents[0][0]), None
     else:
-        if not files:
-            raise HTTPException(400, "Upload at least one PDF or set use_sample=true.")
-        if len(files) > MAX_BATCH_FILES:
-            raise HTTPException(413, f"At most {MAX_BATCH_FILES} files per batch.")
-        documents = []
-        for f in files:
-            try:
-                documents.append((f.filename or "upload.pdf", read_document(f, use_sample=False)))
-            except HTTPException as exc:
-                raise HTTPException(exc.status_code, f"{f.filename}: {exc.detail}") from None
+        run = recheck_task(api_key, model, current, wanted)
 
     try:
-        job = JOBS.submit(documents, model=model, api_key=api_key)
+        job = JOBS.submit(documents, run=run, kind=task, model=model)
     except JobLimitError:
         raise HTTPException(429, "Too many jobs are running. Try again in a minute.") from None
-    logger.info("Job %s started — model=%s documents=%d", job["id"][:8], model, len(documents))
+    logger.info("Job %s started — task=%s model=%s documents=%d", job["id"][:8], task, model, len(documents))
     return job
 
 
@@ -225,7 +285,8 @@ def job_status(job_id: str) -> dict:
 
 
 @app.get("/api/jobs/{job_id}/documents/{doc_id}")
-def job_result(job_id: str, doc_id: str) -> dict:
+def job_result(job_id: str, doc_id: str):
+    """One document's result: an ExtractionResult, an evaluation report or a RecheckResult, by the job's task."""
     result = JOBS.result(job_id, doc_id)
     if result is None:
         raise HTTPException(404, "No result for this document (yet).")
@@ -262,67 +323,6 @@ def history_delete(doc_id: str) -> Response:
     if not HISTORY.delete(doc_id):
         raise HTTPException(404, "No such document in history.")
     return Response(status_code=204)
-
-
-@app.post("/api/evaluate")
-def evaluate(
-    x_gemini_key: Annotated[str | None, Header()] = None,
-    use_sample: Annotated[bool, Form()] = False,
-    file: Annotated[UploadFile | None, File()] = None,
-) -> dict:
-    api_key = require_api_key(x_gemini_key)
-    data = read_document(file, use_sample)
-
-    logger.info("Evaluation started — sample=%s", use_sample)
-    with pdf_on_disk(data) as path:
-        # The sample has known answers, so its evaluation can measure real accuracy
-        truth = None
-        if use_sample and SAMPLE_TRUTH.exists():
-            truth = json.loads(SAMPLE_TRUTH.read_text(encoding="utf-8"))
-        report = run_evaluation(pdf_path=path, api_key=api_key, truth=truth)
-    report["pdf"] = "sample_deed.pdf" if use_sample else (file.filename or "upload.pdf")
-
-    # Per-model failures are caught inside run_evaluation; if every model
-    # failed for the same auth reason, surface it as a proper HTTP error.
-    errors = [m["error"] for m in report["models"] if m.get("error")]
-    all_failed = errors and len(errors) == len(report["models"])
-    if all_failed and all("API key" in e or "API_KEY_INVALID" in e for e in errors):
-        raise HTTPException(401, "Gemini rejected the API key.")
-    return report
-
-
-@app.post("/api/recheck")
-def recheck(
-    x_gemini_key: Annotated[str | None, Header()] = None,
-    model: Annotated[str, Form()] = GeminiExtractor.MODELS[0],
-    deed: Annotated[str, Form()] = "{}",
-    fields: Annotated[str, Form()] = "[]",
-    use_sample: Annotated[bool, Form()] = False,
-    file: Annotated[UploadFile | None, File()] = None,
-) -> dict:
-    """Read a few flagged fields again at higher resolution: one model call."""
-    api_key = require_api_key(x_gemini_key)
-    if model not in GeminiExtractor.MODELS:
-        raise HTTPException(400, f"Unknown model '{model}'.")
-    try:
-        current, wanted = json.loads(deed), json.loads(fields)
-    except json.JSONDecodeError:
-        raise HTTPException(422, "deed and fields must be JSON.") from None
-    if not isinstance(current, dict) or not isinstance(wanted, list) or not all(isinstance(f, str) for f in wanted):
-        raise HTTPException(422, "deed must be an object and fields a list of field paths.")
-    if not 1 <= len(wanted) <= MAX_RECHECK_FIELDS:
-        raise HTTPException(422, f"Re-check between 1 and {MAX_RECHECK_FIELDS} fields.")
-    data = read_document(file, use_sample)
-
-    logger.info("Re-check started — model=%s fields=%d", model, len(wanted))
-    try:
-        with pdf_on_disk(data) as path:
-            return run_recheck(pdf_path=path, api_key=api_key, deed=current, fields=wanted, model_name=model)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from None
-    except genai_errors.APIError as exc:
-        logger.warning("Gemini error during re-check: %s", exc.code)
-        raise gemini_error(exc) from None
 
 
 # Edited results: the UI re-checks and exports the user's corrected deed.

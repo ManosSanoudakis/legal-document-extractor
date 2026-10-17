@@ -1,5 +1,5 @@
 // Read and update deed values by path, e.g. "property.kaek" or "sellers[0].tax_id".
-import type { ExtractionResult } from "./types";
+import type { Deed } from "./types";
 
 type Node = Record<string, unknown>;
 
@@ -9,7 +9,7 @@ function parse(path: string): [section: string, index: number | null, key: strin
   return [m[1], m[2] === undefined ? null : Number(m[2]), m[3]];
 }
 
-export function getPath(deed: ExtractionResult, path: string): unknown {
+export function getPath(deed: Deed, path: string): unknown {
   const [section, index, key] = parse(path);
   const node = (deed as Node)[section];
   const item = index === null ? node : Array.isArray(node) ? node[index] : undefined;
@@ -17,7 +17,7 @@ export function getPath(deed: ExtractionResult, path: string): unknown {
 }
 
 /** Return a copy of the deed with one value replaced. */
-export function setPath(deed: ExtractionResult, path: string, value: unknown): ExtractionResult {
+export function setPath(deed: Deed, path: string, value: unknown): Deed {
   const [section, index, key] = parse(path);
   const node = (deed as Node)[section];
   if (index === null) {
@@ -29,7 +29,7 @@ export function setPath(deed: ExtractionResult, path: string, value: unknown): E
 }
 
 /** Like getPath, but undefined for a path that is not a single field (e.g. "sellers"). */
-export function tryGetPath(deed: ExtractionResult, path: string): unknown {
+export function tryGetPath(deed: Deed, path: string): unknown {
   try {
     return getPath(deed, path);
   } catch {
@@ -49,10 +49,4 @@ export function parseNumber(input: string): number | string | null {
   const normalised = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
   const n = Number(normalised.replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) && /\d/.test(s) ? n : s;
-}
-
-/** The deed without the response metadata, as sent to /api/validate and /api/export. */
-export function deedData(deed: ExtractionResult): ExtractionResult {
-  const { _meta, _validation, _error, ...data } = deed;
-  return data;
 }

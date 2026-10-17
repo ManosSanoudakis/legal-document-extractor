@@ -67,8 +67,8 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
         />
         <p className="mt-2 text-xs text-ink-500 dark:text-stone-400">
           {scored
-            ? "Accuracy compares every field with the known correct answers for the sample deed, so an invented value counts as wrong. Completeness only counts fields that are filled in."
-            : "This document has no known correct answers, so only completeness is shown: the share of fields a model filled in, right or wrong. Evaluate the sample deed to measure accuracy."}
+            ? "Accuracy compares every field with the known correct answers for this deed, so an invented value counts as wrong. Completeness only counts fields that are filled in."
+            : "This document has no known correct answers, so only completeness is shown: the share of fields a model filled in, right or wrong. Evaluate the sample or a demo deed to measure accuracy."}
         </p>
       </div>
 

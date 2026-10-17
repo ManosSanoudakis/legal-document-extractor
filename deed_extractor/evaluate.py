@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-from accuracy import score_accuracy
-from extractor import GeminiExtractor, pdf_page_texts, pdf_to_images
+from .accuracy import score_accuracy
+from .extractor import GeminiExtractor, pdf_page_texts, pdf_to_images
+from .schema import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +91,13 @@ class RunResult:
     completeness: dict
     elapsed:      float
     error:        str | None = None
-    raw:          dict       = field(default_factory=dict)
+    result:       ExtractionResult | None = None
     accuracy:     dict | None = None
+    exception:    Exception | None = None
+
+    @property
+    def deed(self) -> dict:
+        return self.result.deed if self.result else {}
 
 
 def _run_once(
@@ -101,18 +108,16 @@ def _run_once(
 ) -> RunResult:
     extractor = GeminiExtractor(api_key=api_key, model_name=model_name)
     try:
-        result  = extractor.extract(image_paths, page_texts)
-        score   = completeness_score(result)
-        elapsed = result.get("_meta", {}).get("elapsed_seconds", 0.0)
+        result = extractor.extract(image_paths, page_texts)
         return RunResult(
-            model=model_name, completeness=score,
-            elapsed=elapsed, raw=result,
+            model=model_name, completeness=completeness_score(result.deed),
+            elapsed=result.meta.elapsed_seconds, result=result,
         )
     except Exception as exc:  # noqa: BLE001
         logger.error("Run failed for %s: %s", model_name, exc)
         return RunResult(
             model=model_name, completeness={},
-            elapsed=0.0, error=str(exc),
+            elapsed=0.0, error=str(exc), exception=exc,
         )
 
 # ---------------------------------------------------------------------------
@@ -124,6 +129,8 @@ def run_evaluation(
     api_key: str,
     models: list[str] | None = None,
     truth: dict | None = None,
+    on_stage: Callable[[str], None] | None = None,
+    raise_if_all_failed: bool = False,
 ) -> dict:
     """
     Run extraction with each model and return a comparison report.
@@ -137,24 +144,33 @@ def run_evaluation(
         models:    Models to benchmark (default: GeminiExtractor.MODELS).
         truth:     Ground-truth deed. When given, each model is also scored
                    on field-level accuracy, which decides the winner.
+        on_stage:  Told "reading" and then "extracting", for progress reporting.
+        raise_if_all_failed: Re-raise the first error if no model succeeded
+                   (e.g. a rejected key), instead of reporting it per model.
 
     Returns:
         Evaluation report dict suitable for JSON serialisation.
     """
     if models is None:
         models = GeminiExtractor.MODELS
+    report_stage = on_stage or (lambda stage: None)
 
     with tempfile.TemporaryDirectory() as pages_dir:
+        report_stage("reading")
         image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
         page_texts = pdf_page_texts(pdf_path)
+        report_stage("extracting")
         # Models run in parallel: total time is the slowest model, not the sum
         with ThreadPoolExecutor(max_workers=len(models)) as pool:
             runs = list(pool.map(lambda m: _run_once(image_paths, page_texts, api_key, m), models))
 
+    if raise_if_all_failed and runs and all(r.exception for r in runs):
+        raise runs[0].exception
+
     if truth is not None:
         for r in runs:
             if not r.error:
-                r.accuracy = score_accuracy(r.raw, truth)
+                r.accuracy = score_accuracy(r.deed, truth)
 
     report: dict = {
         "pdf": pdf_path,
@@ -164,7 +180,7 @@ def run_evaluation(
                 "elapsed_s":    r.elapsed,
                 "completeness": r.completeness,
                 "accuracy":     r.accuracy,
-                "checks_failed": len(r.raw.get("_validation", [])),
+                "checks_failed": len(r.result.validation) if r.result else 0,
                 "error":        r.error,
             }
             for r in runs
@@ -172,7 +188,7 @@ def run_evaluation(
     }
 
     if len(runs) == 2 and not any(r.error for r in runs):
-        report["field_diffs"] = field_diff(runs[0].raw, runs[1].raw)
+        report["field_diffs"] = field_diff(runs[0].deed, runs[1].deed)
         if truth is not None:
             score = lambda r: r.accuracy["accuracy_pct"]  # noqa: E731
         else:
@@ -187,7 +203,8 @@ def run_evaluation(
             "speed": fastest.model,
         }
 
-    report["raw_results"] = {r.model: r.raw for r in runs}
+    # Each model's full answer, so a change to the scoring can be re-applied later
+    report["raw_results"] = {r.model: r.result.model_dump(mode="json") if r.result else None for r in runs}
     return report
 
 # ---------------------------------------------------------------------------

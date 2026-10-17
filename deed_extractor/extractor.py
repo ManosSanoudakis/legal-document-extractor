@@ -15,8 +15,8 @@ from google.genai import types
 from PIL import Image
 from pydantic import ValidationError
 
-from schema import Deed, Recheck, empty_deed, field_description
-from validators import PATH_PATTERN, get_path, in_text, validate_deed, values_agree
+from .schema import Deed, ExtractionResult, Meta, Recheck, RecheckResult, empty_deed, field_description
+from .validators import PATH_PATTERN, get_path, in_text, validate_deed, values_agree
 
 logger = logging.getLogger(__name__)
 
@@ -145,14 +145,15 @@ class BaseExtractor(ABC):
         self.model_name = model_name
 
     @abstractmethod
-    def extract(self, image_paths: list[Path], page_texts: list[str] | None = None) -> dict: ...
+    def extract(self, image_paths: list[Path], page_texts: list[str] | None = None) -> ExtractionResult: ...
 
     @abstractmethod
     def recheck(self, pages: list[tuple[int, Path, str]], fields: str) -> list[dict]:
         """Read the described fields again from (page number, image, text) triples."""
 
     @staticmethod
-    def _parse_response(text: str | None) -> dict:
+    def _parse_response(text: str | None) -> tuple[dict, str | None]:
+        """Plain JSON parsing of the answer: the deed, or an empty deed and the parse error."""
         # text is None when the model returns no content (e.g. hit the token cap)
         clean = (
             (text or "").strip()
@@ -162,19 +163,19 @@ class BaseExtractor(ABC):
             .strip()
         )
         try:
-            return json.loads(clean)
+            return json.loads(clean), None
         except json.JSONDecodeError as exc:
             logger.error("JSON parse error: %s", exc)
-            return {**empty_deed(), "_error": str(exc)}
+            return empty_deed(), str(exc)
 
-    def _meta(self, elapsed: float, pages: int, text_layer: bool) -> dict:
-        return {
-            "model": self.model_name,
-            "provider": self.__class__.__name__.replace("Extractor", "").lower(),
-            "pages": pages,
-            "text_layer": text_layer,
-            "elapsed_seconds": round(elapsed, 2),
-        }
+    def _meta(self, elapsed: float, pages: int, text_layer: bool) -> Meta:
+        return Meta(
+            model=self.model_name,
+            provider=self.__class__.__name__.replace("Extractor", "").lower(),
+            pages=pages,
+            text_layer=text_layer,
+            elapsed_seconds=round(elapsed, 2),
+        )
 
 # ---------------------------------------------------------------------------
 # Gemini backend
@@ -185,7 +186,7 @@ class GeminiExtractor(BaseExtractor):
 
     MODELS = MODELS
 
-    def extract(self, image_paths: list[Path], page_texts: list[str] | None = None) -> dict:
+    def extract(self, image_paths: list[Path], page_texts: list[str] | None = None) -> ExtractionResult:
         client = genai.Client(api_key=self.api_key, http_options=HTTP_OPTIONS)
         images = [Image.open(p) for p in image_paths]
         texts = page_texts or [""] * len(images)
@@ -224,10 +225,13 @@ class GeminiExtractor(BaseExtractor):
         # Values can be checked against the text only if every page has one;
         # otherwise a value from a scanned page would be flagged as missing
         full_text = " ".join(texts) if all(texts) else None
-        data = self._structured(response)
-        data["_validation"] = validate_deed(data, text=full_text)
-        data["_meta"] = self._meta(elapsed, len(images), text_layer=full_text is not None)
-        return data
+        deed, error = self._structured(response)
+        return ExtractionResult(
+            deed=deed,
+            meta=self._meta(elapsed, len(images), text_layer=full_text is not None),
+            validation=validate_deed(deed, text=full_text),
+            error=error,
+        )
 
     def recheck(self, pages: list[tuple[int, Path, str]], fields: str) -> list[dict]:
         client = genai.Client(api_key=self.api_key, http_options=HTTP_OPTIONS)
@@ -259,12 +263,12 @@ class GeminiExtractor(BaseExtractor):
             logger.warning("Re-check response did not match the schema")
             return []
 
-    def _structured(self, response: types.GenerateContentResponse) -> dict:
-        """Schema-validated output, falling back to plain JSON parsing."""
+    def _structured(self, response: types.GenerateContentResponse) -> tuple[dict, str | None]:
+        """Schema-validated output, falling back to plain JSON parsing; and the parse error, if any."""
         if isinstance(response.parsed, Deed):
-            return response.parsed.model_dump(mode="json")
+            return response.parsed.model_dump(mode="json"), None
         try:
-            return Deed.model_validate_json(response.text or "").model_dump(mode="json")
+            return Deed.model_validate_json(response.text or "").model_dump(mode="json"), None
         except ValidationError:
             # Schema-constrained output should always validate; keep whatever
             # JSON came back rather than losing it, and flag the problem.
@@ -286,8 +290,8 @@ def run_pipeline(
     api_key: str,
     model_name: str = MODELS[0],
     on_stage: Callable[[str], None] | None = None,
-) -> dict:
-    """PDF → page images (+ text layer) → VLM extraction → structured dict.
+) -> ExtractionResult:
+    """PDF → page images (+ text layer) → VLM extraction → structured result.
 
     Page images are written to a temporary directory that is deleted
     afterwards, so no document data is left on disk. on_stage, if given, is
@@ -325,13 +329,23 @@ def describe_field(deed: dict, path: str) -> str | None:
     return f"- {path} [{who}]: {description}"
 
 
+def recheck_lines(deed: dict, fields: list[str]) -> list[str]:
+    """One line per field for the re-check prompt; ValueError if any field cannot be re-checked."""
+    lines = {f: describe_field(deed, f) for f in dict.fromkeys(fields)}
+    unknown = [f for f, line in lines.items() if line is None]
+    if unknown or not lines or len(lines) > MAX_RECHECK_FIELDS:
+        raise ValueError(f"Cannot re-check these fields: {unknown or list(lines)}")
+    return list(lines.values())
+
+
 def run_recheck(
     pdf_path: str,
     api_key: str,
     deed: dict,
     fields: list[str],
     model_name: str = MODELS[0],
-) -> dict:
+    on_stage: Callable[[str], None] | None = None,
+) -> RecheckResult:
     """A second, independent reading of a few fields, at higher resolution.
 
     Only the pages the first reading cited are sent (all pages if it cited
@@ -339,27 +353,28 @@ def run_recheck(
     reading cannot simply repeat them. Each answer says whether it agrees with
     the current value and, for a digital PDF, whether it appears in the text.
     """
-    lines = {f: describe_field(deed, f) for f in dict.fromkeys(fields)}
-    unknown = [f for f, line in lines.items() if line is None]
-    if unknown or not lines or len(lines) > MAX_RECHECK_FIELDS:
-        raise ValueError(f"Cannot re-check these fields: {unknown or list(lines)}")
+    lines = recheck_lines(deed, fields)
+    asked = set(fields)
+    report = on_stage or (lambda stage: None)
 
+    report("reading")
     texts = pdf_page_texts(pdf_path)
     cited = {
         s.get("page") for s in deed.get("sources") or []
-        if s.get("field") in lines and isinstance(s.get("page"), int) and 1 <= s["page"] <= len(texts)
+        if s.get("field") in asked and isinstance(s.get("page"), int) and 1 <= s["page"] <= len(texts)
     }
     pages = sorted(cited) or list(range(1, len(texts) + 1))
     t0 = time.perf_counter()
     with tempfile.TemporaryDirectory() as pages_dir:
         images = pdf_to_images(pdf_path, pages_dir, dpi=300 if len(pages) <= 4 else 200, pages=pages)
         triples = [(n, img, texts[n - 1]) for n, img in zip(pages, images, strict=True)]
-        answers = _get_extractor(model_name, api_key).recheck(triples, "\n".join(lines.values()))
+        report("extracting")
+        answers = _get_extractor(model_name, api_key).recheck(triples, "\n".join(lines))
 
     full_text = " ".join(texts) if all(texts) else None
     results = []
     for a in answers:
-        if a.get("field") not in lines:
+        if a.get("field") not in asked:
             continue
         key = a["field"].rsplit(".", 1)[-1]
         value = a.get("value")
@@ -368,10 +383,9 @@ def run_recheck(
             "agrees": values_agree(key, value, get_path(deed, a["field"])),
             "found_in_text": None if full_text is None or value is None else in_text(key, value, full_text),
         })
-    return {
-        "answers": results,
-        "_meta": {"model": model_name, "pages": pages, "elapsed_seconds": round(time.perf_counter() - t0, 2)},
-    }
+    return RecheckResult(
+        answers=results, model=model_name, pages=pages, elapsed_seconds=round(time.perf_counter() - t0, 2),
+    )
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -398,5 +412,5 @@ if __name__ == "__main__":
     result = run_pipeline(pdf_path=args.pdf, api_key=api_key, model_name=args.model)
 
     output = Path(args.output)
-    output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    output.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     print(output.read_text(encoding="utf-8"))
