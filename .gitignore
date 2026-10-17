@@ -11,12 +11,14 @@ __pycache__/
 !samples/sample_deed.pdf
 !samples/dataset/*.pdf
 !samples/dataset_scanned/*.pdf
+!samples/dataset_long/*.pdf
 
 # Extracted outputs
 extracted_data.json
 evaluation_results.json
 benchmark_results.json
 benchmark_scanned.json
+benchmark_long.json
 
 # IDE
 .vscode/
