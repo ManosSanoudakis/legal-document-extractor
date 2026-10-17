@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { deleteHistory, exportBatch, getHistory, listHistory } from "../api";
+import { exportBatch } from "../api";
 import { deedType, price } from "../format";
+import { clearBrowserHistory, useHistoryStore } from "../history";
 import type { HistoryItem, HistoryRecord } from "../types";
 import { ResultsView } from "./ResultsView";
 import { Alert, Badge, Button, Cell, Icon, Spinner, Table } from "./ui";
@@ -10,18 +11,20 @@ const when = new Intl.DateTimeFormat("el-GR", { dateStyle: "short", timeStyle: "
 
 /** Earlier results: extracted values and corrections only, never the PDFs. */
 export function HistoryView() {
+  const history = useHistoryStore();
   const [items, setItems] = useState<HistoryItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<HistoryRecord | null>(null);
   const [busy, setBusy] = useState(false);
 
   function refresh() {
-    listHistory()
+    history
+      .list()
       .then(setItems)
       .catch((err: Error) => setError(err.message));
   }
 
-  useEffect(refresh, []);
+  useEffect(refresh, [history]);
 
   async function show(item: HistoryItem) {
     if (open?.id === item.id) {
@@ -30,7 +33,7 @@ export function HistoryView() {
       return;
     }
     try {
-      setOpen(await getHistory(item.id));
+      setOpen(await history.get(item.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open this result");
     }
@@ -39,7 +42,7 @@ export function HistoryView() {
   async function remove(item: HistoryItem) {
     if (!window.confirm(`Delete the saved result for ${item.filename}? This cannot be undone.`)) return;
     try {
-      await deleteHistory(item.id);
+      await history.remove(item.id);
       if (open?.id === item.id) setOpen(null);
       refresh();
     } catch (err) {
@@ -47,12 +50,19 @@ export function HistoryView() {
     }
   }
 
+  function removeAll() {
+    if (!window.confirm("Delete every result saved in this browser? This cannot be undone.")) return;
+    clearBrowserHistory();
+    setOpen(null);
+    refresh();
+  }
+
   async function download(format: "xlsx" | "csv") {
     if (!items) return;
     setBusy(true);
     setError(null);
     try {
-      const records = await Promise.all(items.map((i) => getHistory(i.id)));
+      const records = await Promise.all(items.map((i) => history.get(i.id)));
       await exportBatch(
         records.map((r) => ({ name: r.filename, deed: r.edited ?? r.result.deed })),
         format,
@@ -76,8 +86,14 @@ export function HistoryView() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-600 dark:text-stone-400">
-          Every extraction is saved here with your corrections. Only the extracted values are kept, never the PDF:
-          upload it again to see its pages or take a second look.
+          Every extraction is saved here with your corrections
+          {history.kind === "browser" ? (
+            <>
+              , <strong className="font-semibold text-ink-800 dark:text-stone-200">in this browser only</strong>: nobody
+              else can see it, and clearing your browser data removes it
+            </>
+          ) : null}
+          . Only the extracted values are kept, never the PDF: upload it again to see its pages or take a second look.
         </p>
         {items && items.length > 0 && (
           <div className="flex gap-2">
@@ -87,10 +103,18 @@ export function HistoryView() {
             <Button variant="secondary" onClick={() => download("csv")} disabled={busy}>
               <Icon name="download" /> CSV (all)
             </Button>
+            {history.kind === "browser" && (
+              <Button variant="secondary" onClick={removeAll}>
+                <Icon name="x" /> Delete all
+              </Button>
+            )}
           </div>
         )}
       </div>
       {error && <Alert tone="error">{error}</Alert>}
+      {history.kind === "browser" && "available" in history && !history.available && (
+        <Alert tone="warning">This browser is not allowing the app to save anything (a private window or blocked site data), so nothing is kept.</Alert>
+      )}
 
       {items && (
         <Table

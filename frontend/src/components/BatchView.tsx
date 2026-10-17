@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { createJob, exportBatch, getJobResult, recheck, waitForJob } from "../api";
 import { deedType, price } from "../format";
+import { remember, useHistoryStore } from "../history";
 import type { AppConfig, Deed, ExtractionResult, Job, JobDocument } from "../types";
 import { ResultsView } from "./ResultsView";
 import { Alert, Badge, Button, Cell, Icon, Spinner, Table, cx } from "./ui";
@@ -27,6 +28,21 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
   const [checked, setChecked] = useState<Record<string, string[]>>({});
 
   const running = job?.status === "running";
+  const history = useHistoryStore();
+  // In browser history, each finished deed is saved here (the server saves them itself otherwise)
+  const saving = useRef<Set<string>>(new Set());
+
+  function keepInBrowser(current: Job) {
+    if (history.kind !== "browser") return;
+    for (const doc of current.documents) {
+      if (doc.status !== "done" || saving.current.has(doc.id)) continue;
+      saving.current.add(doc.id);
+      getJobResult(current.id, doc.id)
+        .then((result) => remember(history, doc.filename, result))
+        .then((result) => setResults((r) => ({ ...r, [doc.id]: result })))
+        .catch(() => saving.current.delete(doc.id));
+    }
+  }
 
   function addFiles(list: FileList | null) {
     if (!list) return;
@@ -54,7 +70,10 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
     setJobFiles(files);
     try {
       const created = await createJob(files, apiKey, { task: "extract", model });
-      await waitForJob(created, setJob);
+      await waitForJob(created, (current) => {
+        setJob(current);
+        keepInBrowser(current);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start the batch");
     }

@@ -4,7 +4,9 @@ services:
     environment:
       # Optional comma-separated model list; empty uses the defaults in deed_extractor/extractor.py
       - GEMINI_MODELS=${GEMINI_MODELS:-}
-      # History (extracted results, never PDFs) lives in the volume below
+      # History (extracted results, never PDFs): "server" keeps one shared history in the
+      # volume below; "browser" keeps each visitor's own in their browser and nothing here
+      - HISTORY=${HISTORY:-server}
       - DATA_DIR=/data
       # Optional: delete history entries older than this many days
       - HISTORY_RETENTION_DAYS=${HISTORY_RETENTION_DAYS:-}

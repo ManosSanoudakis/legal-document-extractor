@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { exportDeed, saveHistory, validate } from "../api";
+import { exportDeed, validate } from "../api";
 import { getPath, parseNumber, setPath, tryGetPath } from "../deed";
+import { useHistoryStore } from "../history";
 import { area, DEED_TYPES, deedType, downloadJson, fieldLabel, price, text } from "../format";
 import type { Deed, ExtractionResult, RecheckAnswer, Source, ValidationIssue } from "../types";
 import { ReviewPanel } from "./ReviewPanel";
@@ -150,6 +151,7 @@ export function ResultsView({
   const [saveState, setSaveState] = useState<"saving" | "saved" | "error" | null>(null);
   const touched = useRef(false); // nothing to save until the user changes something
   const historyId = result.meta.history_id;
+  const history = useHistoryStore();
 
   useEffect(() => {
     if (touched.current) onReviewedChange?.([...reviewed]);
@@ -160,12 +162,13 @@ export function ResultsView({
     if (!historyId || !touched.current) return;
     setSaveState("saving");
     const timer = setTimeout(() => {
-      saveHistory(historyId, edited ? deed : null, [...reviewed])
+      history
+        .update(historyId, edited ? deed : null, [...reviewed])
         .then(() => setSaveState("saved"))
         .catch(() => setSaveState("error"));
     }, 800);
     return () => clearTimeout(timer);
-  }, [deed, reviewed, edited, historyId]);
+  }, [deed, reviewed, edited, historyId, history]);
 
   // Re-check the data shortly after the user stops typing
   useEffect(() => {

@@ -61,7 +61,7 @@ The backend is the [`deed_extractor/`](deed_extractor/) package; long work (extr
 
 ## Privacy and security
 
-Built to run on one machine or an office network. Each user brings their own Gemini key, which is never stored or logged; PDFs are deleted after processing and only extracted values are kept. There are no logins yet, so do not expose it publicly, and use a paid key for real client deeds. See [Security](docs/design.md#security) for the full list.
+Built to run on one machine or an office network. Each user brings their own Gemini key, which is never stored or logged; PDFs are deleted after processing and only extracted values are kept. History is shared on the server by default; with `HISTORY=browser`, each visitor keeps their own in their browser and the server stores nothing. There are no logins yet, so do not expose it publicly, and use a paid key for real client deeds. See [Security](docs/design.md#security) for the full list.
 
 All sample deeds are **fictional**. The app was developed against a real deed that cannot be shared (GDPR); the samples copy its format with invented names and numbers, and tax IDs that deliberately fail the check-digit test.
 

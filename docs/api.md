@@ -13,8 +13,8 @@ The REST API behind the app. With the backend running, interactive docs are at [
 | `POST` | `/api/jobs` | Start long-running work; returns a job at once (see below) |
 | `GET` | `/api/jobs/{id}` | Progress: each document's stage, time and a short summary. Finished jobs are kept for an hour. |
 | `GET` | `/api/jobs/{id}/documents/{doc}` | One document's result: an `ExtractionResult`, an `EvaluationReport` or a re-check, by task |
-| `GET` | `/api/history` | Saved results, newest first, with what is left to check |
-| `GET` / `PUT` / `DELETE` | `/api/history/{id}` | One saved result: read it, save corrections and review ticks, or delete it |
+| `GET` | `/api/history` | Saved results, newest first, with what is left to check. Server history mode only (`404` with `HISTORY=browser`) |
+| `GET` / `PUT` / `DELETE` | `/api/history/{id}` | One saved result: read it, save corrections and review ticks, or delete it. Server history mode only |
 | `POST` | `/api/validate` | JSON deed (e.g. after manual corrections). Returns `{"issues": [...]}` |
 | `POST` | `/api/export?format=xlsx\|csv` | JSON deed. Returns an Excel file (sheets *Deed* and *People*) or a CSV |
 | `POST` | `/api/export/batch?format=xlsx\|csv` | `{"deeds": [{"name": ..., "deed": ...}]}`. One row per deed (sheets *Deeds* and *People*) |
@@ -25,7 +25,7 @@ The REST API behind the app. With the backend running, interactive docs are at [
 
 | `task` | Documents | Other fields | Result |
 |---|---|---|---|
-| `extract` (default) | Up to 20 | optional `model` | `ExtractionResult`, also saved to history |
+| `extract` (default) | Up to 20 | optional `model` | `ExtractionResult`, also saved to history in server mode |
 | `evaluate` | One | | `EvaluationReport`: every model compared, and scored for the sample and demo deeds |
 | `recheck` | One | `deed` and `fields` (JSON), optional `model` | A second reading of those fields |
 

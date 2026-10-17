@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError, evaluate, extract, getConfig, getDemo, recheck } from "./api";
 import { BatchView, STAGE_LABELS } from "./components/BatchView";
 import { DocumentCard } from "./components/DocumentCard";
@@ -6,6 +6,7 @@ import { EvaluationView } from "./components/EvaluationView";
 import { HistoryView } from "./components/HistoryView";
 import { ResultsView } from "./components/ResultsView";
 import { SettingsCard } from "./components/SettingsCard";
+import { browserHistory, HistoryContext, remember, serverHistory } from "./history";
 import { Alert, Button, Card, Icon, Spinner, Tabs } from "./components/ui";
 import type { AppConfig, DocumentChoice, EvaluationReport, ExtractionResult, JobDocument } from "./types";
 
@@ -53,6 +54,11 @@ function useElapsed(startedAt: number | null): number {
 
 type View = "extract" | "batch" | "history" | "evaluate";
 
+/** The file name a result is saved under in history. */
+function documentName(doc: DocumentChoice): string {
+  return doc.kind === "upload" ? doc.file.name : doc.kind === "demo" ? `${doc.demo.id}.pdf` : "sample_deed.pdf";
+}
+
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -63,6 +69,7 @@ export default function App() {
   const [previewPage, setPreviewPage] = useState<number | null>(null);
   const [stage, setStage] = useState<JobDocument | null>(null);
   const extraction = useTask<ExtractionResult>();
+  const history = useMemo(() => (config?.history === "browser" ? browserHistory() : serverHistory), [config]);
   const evaluation = useTask<EvaluationReport>();
 
   /** A demo deed opens on its saved answer at once: no key, no model call. */
@@ -114,6 +121,7 @@ export default function App() {
   const demoShown = doc?.kind === "demo" && extraction.task.status === "done";
 
   return (
+    <HistoryContext.Provider value={history}>
     <div className="min-h-screen">
       <Header />
 
@@ -178,7 +186,9 @@ export default function App() {
                     onRun={() => {
                       if (!doc) return;
                       setStage(null);
-                      extraction.run(() => extract(doc, model, apiKey.trim(), setStage));
+                      extraction.run(async () =>
+                        remember(history, documentName(doc), await extract(doc, model, apiKey.trim(), setStage)),
+                      );
                     }}
                     render={(data) => (
                       <ResultsView
@@ -214,6 +224,7 @@ export default function App() {
         )}
       </main>
     </div>
+    </HistoryContext.Provider>
   );
 }
 

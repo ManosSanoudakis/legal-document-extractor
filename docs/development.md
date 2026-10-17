@@ -21,7 +21,21 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Interactive API docs are at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-With Docker instead (`docker compose up --build`), the app is at [http://localhost:8080](http://localhost:8080) and history is kept in a Docker volume. Set `HISTORY_RETENTION_DAYS` to delete entries older than that many days.
+With Docker instead (`docker compose up --build`), the app is at [http://localhost:8080](http://localhost:8080).
+
+### Where history is kept
+
+| `HISTORY` | Who sees what | Stored |
+|---|---|---|
+| `server` (default) | Everyone who can reach the app shares one history | SQLite on the server (a Docker volume) |
+| `browser` | Each visitor sees only their own | In that visitor's browser; the server keeps nothing |
+
+```bash
+set HISTORY=browser               # macOS/Linux: export HISTORY=browser
+docker compose up --build
+```
+
+In server mode, `HISTORY_RETENTION_DAYS` deletes entries older than that many days. In browser mode, the newest 100 results are kept, and the History tab has **Delete all**.
 
 ## Command line
 

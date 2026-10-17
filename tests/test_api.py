@@ -253,3 +253,17 @@ def test_finished_jobs_go_to_history_without_the_pdf(client, monkeypatch, sample
     assert item["edited"] and item["summary"]["price"] == 1 and item["summary"]["to_check"] == 0
     assert client.delete(f"/api/history/{history_id}").status_code == 204
     assert client.get(f"/api/history/{history_id}").status_code == 404
+
+
+def test_browser_history_mode_keeps_nothing_on_the_server(client, monkeypatch, sample_truth):
+    """With HISTORY=browser each visitor keeps their own history; the server saves and serves none."""
+    monkeypatch.setattr(api, "HISTORY", None)
+    monkeypatch.setattr(api, "HISTORY_MODE", "browser")
+    monkeypatch.setattr(api, "run_pipeline", lambda pdf_path, api_key, model_name, on_stage=None:
+                        extraction(sample_truth))
+    assert client.get("/api/config").json()["history"] == "browser"
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={"use_sample": "true"}))
+    assert "history_id" not in job["documents"][0]
+    assert result_of(client, job)["meta"]["history_id"] is None
+    assert client.get("/api/history").status_code == 404
+    assert client.put("/api/history/x", json={"edited": None, "reviewed": []}).status_code == 404

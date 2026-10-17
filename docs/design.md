@@ -49,6 +49,9 @@ Jobs are kept in the API process's memory, on purpose: one server for one office
 ### Why store results but not PDFs?
 A deed is full of personal data. History keeps what the user needs to come back to (the extracted values, their corrections and which flags they checked) and nothing more. `HISTORY_RETENTION_DAYS` deletes old entries.
 
+### Why can history live in the browser?
+Without logins, a server history is shared by everyone who can reach the app. That suits one person or one office, not a demo open to several people. With `HISTORY=browser`, each visitor's history is kept in their own browser (local storage), so nobody sees anyone else's results and the server holds no one's data, with no accounts needed. The cost: it is lost if they clear their browser data, and does not follow them to another device. Both modes share one interface in the frontend (`history.ts`), so the rest of the app does not know which is in use.
+
 ### Why does each user bring their own API key?
 No key is stored on the server. The browser keeps the key in memory and sends it per request in the `X-Gemini-Key` header, so nobody can spend someone else's quota. For real client deeds, use a paid key: Google's terms allow content sent on the free tier to be used to improve its products, which personal data should not be. A firm would then keep its own key on the server and add logins.
 
@@ -68,7 +71,7 @@ The app is built to run on one machine or an office network, not as a public ser
 - **Demo files**: served only by id from a fixed list, never by a path from the request.
 
 **What it does not do (needed before hosting it for others):**
-- **Logins.** Anyone who can reach the server sees and edits the same history.
+- **Logins.** In server history mode, anyone who can reach the server sees and edits the same history (`HISTORY=browser` gives each visitor their own instead).
 - **Limits per user.** The job limit is global; one person can fill it.
 - **A server-side key** for a firm's own account, ideally a paid one (see above).
 - **HTTPS.** Run it behind a proxy that provides it.

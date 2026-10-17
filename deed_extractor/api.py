@@ -165,16 +165,29 @@ def parse_recheck(deed: str | None, fields: str | None) -> tuple[dict, list[str]
     return current, wanted
 
 
+# Where saved results live:
+# - "server": one shared SQLite history, for a single user or an office behind its own access control
+# - "browser": each visitor's own history, kept in their browser; the server stores nothing
+HISTORY_MODE = os.environ.get("HISTORY", "server").strip().lower() or "server"
+if HISTORY_MODE not in ("server", "browser"):
+    raise RuntimeError(f"HISTORY must be 'server' or 'browser', not {HISTORY_MODE!r}")
+
 DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "data"))
 HISTORY = History(
     DATA_DIR / "history.sqlite3",
     retention_days=float(os.environ["HISTORY_RETENTION_DAYS"]) if os.environ.get("HISTORY_RETENTION_DAYS") else None,
-)
+) if HISTORY_MODE == "server" else None
+
+
+def server_history() -> History:
+    if HISTORY is None:
+        raise HTTPException(404, "History is kept in each visitor's browser on this server.")
+    return HISTORY
 
 
 def save_to_history(job: Job, doc: JobDocument) -> None:
     """Every finished extraction goes to history; its id travels with the result so edits can be saved."""
-    if job.kind != "extract":
+    if job.kind != "extract" or HISTORY is None:
         return
     history_id = HISTORY.add(doc.filename, job.model or "", doc.result)
     doc.result.meta.history_id = history_id
@@ -201,6 +214,7 @@ def config() -> dict:
         "max_file_mb": MAX_FILE_MB,
         "max_pages": MAX_PAGES,
         "max_batch_files": MAX_BATCH_FILES,
+        "history": HISTORY_MODE,
     }
 
 
@@ -291,12 +305,12 @@ def job_result(job_id: str, doc_id: str):
 
 @app.get("/api/history")
 def history_list() -> list[dict]:
-    return HISTORY.list()
+    return server_history().list()
 
 
 @app.get("/api/history/{doc_id}")
 def history_get(doc_id: str) -> dict:
-    record = HISTORY.get(doc_id)
+    record = server_history().get(doc_id)
     if record is None:
         raise HTTPException(404, "No such document in history.")
     return record
@@ -309,14 +323,14 @@ def history_update(
     reviewed: Annotated[list[str], Body()] = [],  # noqa: B006 — FastAPI copies defaults per request
 ) -> dict:
     """Save the user's corrections (null = none) and the fields they have checked."""
-    if not HISTORY.update(doc_id, edited, reviewed):
+    if not server_history().update(doc_id, edited, reviewed):
         raise HTTPException(404, "No such document in history.")
     return {"saved": True}
 
 
 @app.delete("/api/history/{doc_id}", status_code=204)
 def history_delete(doc_id: str) -> Response:
-    if not HISTORY.delete(doc_id):
+    if not server_history().delete(doc_id):
         raise HTTPException(404, "No such document in history.")
     return Response(status_code=204)
 

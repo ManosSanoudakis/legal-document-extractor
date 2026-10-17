@@ -134,6 +134,8 @@ export interface AppConfig {
   max_file_mb: number;
   max_pages: number;
   max_batch_files: number;
+  /** Where saved results live: one shared history on the server, or each visitor's own in their browser */
+  history: "server" | "browser";
 }
 
 /** A document's progress in a background job (see jobs.py). */
