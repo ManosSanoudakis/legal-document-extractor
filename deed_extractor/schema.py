@@ -51,7 +51,10 @@ class Property(BaseModel):
     floor: str | None = Field(description="Floor as written, e.g. 2ος όροφος, ισόγειο")
     area_sqm: float | None = Field(description="Area in square metres as a number, e.g. 85.4")
     kaek: str | None = Field(description="ΚΑΕΚ land-registry code exactly as written, e.g. 050230600001/0/0")
-    building_permit: str | None = Field(description="Building permit reference as written")
+    building_permit: str | None = Field(
+        description="Building permit number together with the authority that issued it, as written, "
+        "e.g. 512/1998 του Πολεοδομικού Γραφείου Αθηνών. Not the number alone"
+    )
 
 
 class Transaction(BaseModel):

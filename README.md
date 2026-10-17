@@ -125,6 +125,8 @@ The short deeds state each value once, so strong and weak models score alike. **
 
 All of these share one template, so a model could do well by learning its wording. **Varied deeds** in `samples/dataset_varied/` are long deeds that also change wording and layout: headings (ΠΡΩΤΟ / Άρθρο 1 / 1.), parties as prose or as «Α.Φ.Μ.: …» fields or with birth year and tax office, dates with the weekday or as 15/3/2024, amounts as «185.000 ευρώ» or «ευρώ 185.000,00», and the sections in another order. Their **harsh scans** in `samples/dataset_varied_scanned/` add what real scans carry: a notary stamp over the text, signatures, a handwritten number in the margin, photocopier streaks, more rotation and lower resolution.
 
+A prompt fix found on one set and measured on the same set can simply be fitted to it. The **held-out set** in `samples/dataset_holdout/` is ten new varied deeds whose building permit is also worded three new ways («άδεια οικοδομής αριθ. …», «οικοδομική άδεια …») and issued by three different offices, so the fix that asks for the permit's issuing office is measured on wording it was not written against.
+
 **Limitation**: the deeds are still generated. Real deeds vary more, and real handwriting is not simulated, so accuracy on real documents will likely be lower.
 
 ---
@@ -153,6 +155,7 @@ All of these share one template, so a model could do well by learning its wordin
 │   ├── dataset_long/               # 10 long deeds full of look-alike values
 │   ├── dataset_varied/             # 10 long deeds in varied wording and layout
 │   ├── dataset_varied_scanned/     # The same 10 as harsh scans (stamps, signatures, notes)
+│   ├── dataset_holdout/            # 10 new varied deeds for checking prompt fixes (see below)
 │   └── make_sample_deed.py         # Script that generates them
 ├── tests/                          # pytest suite (no API key needed)
 ├── scripts/
@@ -173,7 +176,7 @@ All of these share one template, so a model could do well by learning its wordin
 └── requirements-dev.txt            # + pytest, ruff
 ```
 
-> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and all datasets with `python samples/make_sample_deed.py --dataset 10 --scanned --long 10 --varied 10 --harsh`, and the demo with `python scripts/build_demo.py`.
+> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and all datasets with `python samples/make_sample_deed.py --dataset 10 --scanned --long 10 --varied 10 --harsh --holdout 10`, and the demo with `python scripts/build_demo.py`.
 
 ---
 

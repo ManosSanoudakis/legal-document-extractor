@@ -1,0 +1,38 @@
+{
+  "notary": {
+    "name": "Αθανάσιος Παράδειγμα",
+    "location": "Αθήνα",
+    "registry_number": "5.855"
+  },
+  "sellers": [
+    {
+      "full_name": "Κωνσταντίνος Παράδειγμα του Γεωργίου",
+      "tax_id": "440706918",
+      "id_document": "ΑΚ 332777",
+      "address": "Οδός Φανταστικής 105, Αθήνα"
+    }
+  ],
+  "buyers": [
+    {
+      "full_name": "Γεώργιος Πλασματικός του Παναγιώτη",
+      "tax_id": "121726761",
+      "id_document": "ΑΧ 005850",
+      "address": "Οδός Πλασματικής 54, Θεσσαλονίκη"
+    }
+  ],
+  "legal_representatives": [],
+  "property": {
+    "type": "διαμέρισμα",
+    "address": "Οδός Ανύπαρκτης 51, Αθήνα",
+    "municipal_unit": "Δημοτική Ενότητα Αμπελοκήπων",
+    "floor": "1ος όροφος",
+    "area_sqm": 47.39,
+    "kaek": "993165821247/0/6",
+    "building_permit": "614/2002 της Διεύθυνσης Πολεοδομίας Νομαρχίας Δοκιμών"
+  },
+  "transaction": {
+    "deed_type": "parental_provision",
+    "price": null,
+    "date": "2016-06-22"
+  }
+}
