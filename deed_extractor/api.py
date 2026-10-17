@@ -1,7 +1,7 @@
 # The API has no logins and is meant to run locally or behind your own access
 # control: everyone who can reach it shares one history. Each caller sends their
 # own Gemini key per request (X-Gemini-Key); it is never stored or logged. See
-# "Security" in the README for what is protected and what a hosted version needs.
+# "Security" in docs/design.md for what is protected and what a hosted version needs.
 from __future__ import annotations
 
 import json
