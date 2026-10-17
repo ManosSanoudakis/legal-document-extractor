@@ -16,9 +16,7 @@ __pycache__/
 # Extracted outputs
 extracted_data.json
 evaluation_results.json
-benchmark_results.json
-benchmark_scanned.json
-benchmark_long.json
+benchmark*.json
 
 # IDE
 .vscode/

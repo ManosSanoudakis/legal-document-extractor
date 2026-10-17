@@ -21,8 +21,9 @@ from fastapi.responses import FileResponse, Response
 from google.genai import errors as genai_errors
 
 from evaluate import run_evaluation
-from export import to_csv, to_xlsx
+from export import batch_to_csv, batch_to_xlsx, to_csv, to_xlsx
 from extractor import MAX_RECHECK_FIELDS, GeminiExtractor, run_pipeline, run_recheck
+from jobs import JobLimitError, JobStore
 from validators import validate_deed
 
 logging.basicConfig(
@@ -35,6 +36,7 @@ SAMPLE_PDF = Path(__file__).parent / "samples" / "sample_deed.pdf"
 SAMPLE_TRUTH = SAMPLE_PDF.with_suffix(".json")  # correct answers for the sample
 MAX_FILE_MB = 20
 MAX_PAGES = 30
+MAX_BATCH_FILES = 20
 
 app = FastAPI(
     title="Legal Document Extractor API",
@@ -94,6 +96,15 @@ def pdf_on_disk(data: bytes) -> Iterator[str]:
             os.unlink(tmp.name)
 
 
+def run_bytes(data: bytes, api_key: str, model: str, on_stage) -> dict:
+    """Extract one PDF given as bytes (used by background jobs)."""
+    with pdf_on_disk(data) as path:
+        return run_pipeline(pdf_path=path, api_key=api_key, model_name=model, on_stage=on_stage)
+
+
+JOBS = JobStore(run=run_bytes)
+
+
 def gemini_error(exc: genai_errors.APIError) -> HTTPException:
     """Translate a Gemini API error into a client-facing HTTP error."""
     text = str(exc)
@@ -119,6 +130,7 @@ def config() -> dict:
         "sample_available": SAMPLE_PDF.exists(),
         "max_file_mb": MAX_FILE_MB,
         "max_pages": MAX_PAGES,
+        "max_batch_files": MAX_BATCH_FILES,
     }
 
 
@@ -152,6 +164,55 @@ def extract(
     except genai_errors.APIError as exc:
         logger.warning("Gemini error during extraction: %s", exc.code)
         raise gemini_error(exc) from None
+
+
+@app.post("/api/jobs", status_code=202)
+def create_job(
+    x_gemini_key: Annotated[str | None, Header()] = None,
+    model: Annotated[str, Form()] = GeminiExtractor.MODELS[0],
+    use_sample: Annotated[bool, Form()] = False,
+    files: Annotated[list[UploadFile] | None, File()] = None,
+) -> dict:
+    """Extract one or more PDFs in the background; poll GET /api/jobs/{id} for progress."""
+    api_key = require_api_key(x_gemini_key)
+    if model not in GeminiExtractor.MODELS:
+        raise HTTPException(400, f"Unknown model '{model}'.")
+    if use_sample:
+        documents = [(SAMPLE_PDF.name, read_document(None, use_sample=True))]
+    else:
+        if not files:
+            raise HTTPException(400, "Upload at least one PDF or set use_sample=true.")
+        if len(files) > MAX_BATCH_FILES:
+            raise HTTPException(413, f"At most {MAX_BATCH_FILES} files per batch.")
+        documents = []
+        for f in files:
+            try:
+                documents.append((f.filename or "upload.pdf", read_document(f, use_sample=False)))
+            except HTTPException as exc:
+                raise HTTPException(exc.status_code, f"{f.filename}: {exc.detail}") from None
+
+    try:
+        job = JOBS.submit(documents, model=model, api_key=api_key)
+    except JobLimitError:
+        raise HTTPException(429, "Too many jobs are running. Try again in a minute.") from None
+    logger.info("Job %s started — model=%s documents=%d", job["id"][:8], model, len(documents))
+    return job
+
+
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str) -> dict:
+    job = JOBS.snapshot(job_id)
+    if job is None:
+        raise HTTPException(404, "No such job (finished jobs are kept for an hour).")
+    return job
+
+
+@app.get("/api/jobs/{job_id}/documents/{doc_id}")
+def job_result(job_id: str, doc_id: str) -> dict:
+    result = JOBS.result(job_id, doc_id)
+    if result is None:
+        raise HTTPException(404, "No result for this document (yet).")
+    return result
 
 
 @app.post("/api/evaluate")
@@ -234,6 +295,28 @@ EXPORTS = {
     "csv": (to_csv, "text/csv; charset=utf-8"),
     "xlsx": (to_xlsx, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
 }
+
+
+BATCH_EXPORTS = {
+    "csv": (batch_to_csv, EXPORTS["csv"][1]),
+    "xlsx": (batch_to_xlsx, EXPORTS["xlsx"][1]),
+}
+
+
+@app.post("/api/export/batch")
+def export_batch(
+    deeds: Annotated[list[dict], Body(embed=True)],
+    format: Annotated[Literal["csv", "xlsx"], Query()] = "xlsx",
+) -> Response:
+    """Many deeds in one file: each item is {"name": <file name>, "deed": <deed>}."""
+    def build(items: list[dict]) -> bytes:
+        return BATCH_EXPORTS[format][0]([(str(i.get("name") or ""), i["deed"]) for i in items])
+
+    return Response(
+        _checked(build, deeds),
+        media_type=BATCH_EXPORTS[format][1],
+        headers={"Content-Disposition": f'attachment; filename="deeds.{format}"'},
+    )
 
 
 @app.post("/api/export")

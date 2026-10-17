@@ -124,10 +124,13 @@ export function ResultsView({
   result,
   onShowPage,
   onRecheck,
+  onChange,
 }: {
   result: ExtractionResult;
   onShowPage?: (page: number) => void;
   onRecheck?: (deed: ExtractionResult, fields: string[]) => Promise<RecheckAnswer[]>;
+  /** Told about every edit (and undo), with the deed as the user now sees it. */
+  onChange?: (deed: ExtractionResult) => void;
 }) {
   const [tab, setTab] = useState<Tab>("parties");
   const [deed, setDeed] = useState<ExtractionResult>(result);
@@ -156,11 +159,14 @@ export function ResultsView({
   }, [deed, edited, result]);
 
   function update(path: string, value: unknown) {
-    setDeed((d) => setPath(d, path, value));
+    const next = setPath(deed, path, value);
+    setDeed(next);
+    onChange?.(next);
     setEdited(true);
   }
 
   function reset() {
+    onChange?.(result);
     setDeed(result);
     setIssues(result._validation);
     setEdited(false);
