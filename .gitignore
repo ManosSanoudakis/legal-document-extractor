@@ -14,6 +14,7 @@ __pycache__/
 !samples/dataset_long/*.pdf
 
 # Extracted outputs
+data/
 extracted_data.json
 evaluation_results.json
 benchmark*.json

@@ -30,7 +30,15 @@ export interface ExtractionResult {
   } | null;
   transaction?: { deed_type?: string | null; price?: number | string | null; date?: string | null } | null;
   sources?: Source[] | null;
-  _meta?: { model: string; provider: string; pages: number; text_layer?: boolean; elapsed_seconds: number };
+  _meta?: {
+    model: string;
+    provider: string;
+    pages: number;
+    text_layer?: boolean;
+    elapsed_seconds: number;
+    /** Set when the result is in history, so edits can be saved there */
+    history_id?: string;
+  };
   _validation?: ValidationIssue[];
   _error?: string;
 }
@@ -112,6 +120,28 @@ export interface JobDocument {
   error: string | null;
   elapsed_seconds: number | null;
   summary: { deed_type: string | null; price: number | null; date: string | null; flags: number; errors: number } | null;
+}
+
+/** A saved result, as listed in the History tab (see history.py). */
+export interface HistoryItem {
+  id: string;
+  filename: string;
+  model: string;
+  created: number;
+  updated: number;
+  edited: boolean;
+  summary: NonNullable<JobDocument["summary"]> & { to_check: number };
+}
+
+export interface HistoryRecord {
+  id: string;
+  filename: string;
+  model: string;
+  created: number;
+  updated: number;
+  result: ExtractionResult;
+  edited: ExtractionResult | null;
+  reviewed: string[];
 }
 
 export interface Job {

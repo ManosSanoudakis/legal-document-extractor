@@ -175,3 +175,32 @@ def test_batch_export(client, sample_truth):
     csv = client.post("/api/export/batch?format=csv", json={"deeds": deeds}).content.decode("utf-8-sig")
     assert csv.splitlines()[1].startswith("a.pdf,")
     assert client.post("/api/export/batch", json={"deeds": [{"name": "x"}]}).status_code == 422
+
+
+def test_finished_jobs_go_to_history_without_the_pdf(client, monkeypatch, sample_truth):
+    import time
+
+    monkeypatch.setattr(api, "run_pipeline", lambda pdf_path, api_key, model_name, on_stage=None: {
+        **sample_truth, "_validation": [{"field": "property.kaek", "severity": "warning"}], "_meta": {},
+    })
+    job = client.post("/api/jobs", headers=KEY, data={"use_sample": "true"}).json()
+    for _ in range(250):
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] == "done":
+            break
+        time.sleep(0.02)
+    [doc] = job["documents"]
+    history_id = doc["history_id"]
+    result = client.get(f"/api/jobs/{job['id']}/documents/{doc['id']}").json()
+    assert result["_meta"]["history_id"] == history_id  # so the UI can save edits
+
+    record = client.get(f"/api/history/{history_id}").json()
+    assert record["filename"] == "sample_deed.pdf"
+    assert "pdf" not in {k.lower() for k in record}  # results only
+    corrected = {**sample_truth, "transaction": {**sample_truth["transaction"], "price": 1}}
+    saved = client.put(f"/api/history/{history_id}", json={"edited": corrected, "reviewed": ["property.kaek"]})
+    assert saved.status_code == 200
+    item = next(i for i in client.get("/api/history").json() if i["id"] == history_id)
+    assert item["edited"] and item["summary"]["price"] == 1 and item["summary"]["to_check"] == 0
+    assert client.delete(f"/api/history/{history_id}").status_code == 204
+    assert client.get(f"/api/history/{history_id}").status_code == 404

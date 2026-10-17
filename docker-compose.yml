@@ -4,6 +4,12 @@ services:
     environment:
       # Optional comma-separated model list; empty uses the defaults in extractor.py
       - GEMINI_MODELS=${GEMINI_MODELS:-}
+      # History (extracted results, never PDFs) lives in the volume below
+      - DATA_DIR=/data
+      # Optional: delete history entries older than this many days
+      - HISTORY_RETENTION_DAYS=${HISTORY_RETENTION_DAYS:-}
+    volumes:
+      - history:/data
     restart: unless-stopped
 
   web:
@@ -13,3 +19,6 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+
+volumes:
+  history:

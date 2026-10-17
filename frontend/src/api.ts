@@ -3,6 +3,8 @@ import type {
   DocumentChoice,
   EvaluationReport,
   ExtractionResult,
+  HistoryItem,
+  HistoryRecord,
   Job,
   RecheckAnswer,
   ValidationIssue,
@@ -76,6 +78,33 @@ export async function waitForJob(job: Job, onUpdate: (job: Job) => void): Promis
     onUpdate(current);
   }
   return current;
+}
+
+export function listHistory(): Promise<HistoryItem[]> {
+  return request<HistoryItem[]>("/api/history");
+}
+
+export function getHistory(id: string): Promise<HistoryRecord> {
+  return request<HistoryRecord>(`/api/history/${id}`);
+}
+
+/** Save the user's corrections (null = none, the model's answer stands) and the fields they checked. */
+export function saveHistory(id: string, edited: ExtractionResult | null, reviewed: string[]): Promise<unknown> {
+  return request(`/api/history/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ edited, reviewed }),
+  });
+}
+
+export async function deleteHistory(id: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/history/${id}`, { method: "DELETE" });
+  } catch {
+    throw new ApiError("Cannot reach the API server. Is the backend running?", 0);
+  }
+  if (!res.ok && res.status !== 404) throw new ApiError(`Delete failed (${res.status})`, res.status);
 }
 
 export function evaluate(doc: DocumentChoice, apiKey: string): Promise<EvaluationReport> {

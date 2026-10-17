@@ -3,7 +3,9 @@
 # This API has no authentication and is meant to run locally. Each caller
 # supplies their own Gemini key (X-Gemini-Key header); no key is stored
 # server-side. Basic input limits (file size, page count) and an output-token
-# cap (extractor.MAX_OUTPUT_TOKENS) are in place.
+# cap (extractor.MAX_OUTPUT_TOKENS) are in place. Extracted results (never the
+# PDFs) are kept in a local history database that everyone using this server
+# can see; HISTORY_RETENTION_DAYS deletes old entries.
 from __future__ import annotations
 
 import json
@@ -23,7 +25,8 @@ from google.genai import errors as genai_errors
 from evaluate import run_evaluation
 from export import batch_to_csv, batch_to_xlsx, to_csv, to_xlsx
 from extractor import MAX_RECHECK_FIELDS, GeminiExtractor, run_pipeline, run_recheck
-from jobs import JobLimitError, JobStore
+from history import History
+from jobs import Job, JobDocument, JobLimitError, JobStore
 from validators import validate_deed
 
 logging.basicConfig(
@@ -102,7 +105,21 @@ def run_bytes(data: bytes, api_key: str, model: str, on_stage) -> dict:
         return run_pipeline(pdf_path=path, api_key=api_key, model_name=model, on_stage=on_stage)
 
 
-JOBS = JobStore(run=run_bytes)
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent / "data"))
+HISTORY = History(
+    DATA_DIR / "history.sqlite3",
+    retention_days=float(os.environ["HISTORY_RETENTION_DAYS"]) if os.environ.get("HISTORY_RETENTION_DAYS") else None,
+)
+
+
+def save_to_history(job: Job, doc: JobDocument) -> None:
+    """Every finished extraction goes to history; its id travels with the result so edits can be saved."""
+    history_id = HISTORY.add(doc.filename, job.model, doc.result)
+    doc.result.setdefault("_meta", {})["history_id"] = history_id
+    doc.extra["history_id"] = history_id
+
+
+JOBS = JobStore(run=run_bytes, on_done=save_to_history)
 
 
 def gemini_error(exc: genai_errors.APIError) -> HTTPException:
@@ -213,6 +230,38 @@ def job_result(job_id: str, doc_id: str) -> dict:
     if result is None:
         raise HTTPException(404, "No result for this document (yet).")
     return result
+
+
+@app.get("/api/history")
+def history_list() -> list[dict]:
+    return HISTORY.list()
+
+
+@app.get("/api/history/{doc_id}")
+def history_get(doc_id: str) -> dict:
+    record = HISTORY.get(doc_id)
+    if record is None:
+        raise HTTPException(404, "No such document in history.")
+    return record
+
+
+@app.put("/api/history/{doc_id}")
+def history_update(
+    doc_id: str,
+    edited: Annotated[dict | None, Body()] = None,
+    reviewed: Annotated[list[str], Body()] = [],  # noqa: B006 — FastAPI copies defaults per request
+) -> dict:
+    """Save the user's corrections (null = none) and the fields they have checked."""
+    if not HISTORY.update(doc_id, edited, reviewed):
+        raise HTTPException(404, "No such document in history.")
+    return {"saved": True}
+
+
+@app.delete("/api/history/{doc_id}", status_code=204)
+def history_delete(doc_id: str) -> Response:
+    if not HISTORY.delete(doc_id):
+        raise HTTPException(404, "No such document in history.")
+    return Response(status_code=204)
 
 
 @app.post("/api/evaluate")
