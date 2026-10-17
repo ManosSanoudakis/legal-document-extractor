@@ -79,7 +79,7 @@ export interface EvaluationReport {
   pdf: string;
   models: ModelRun[];
   field_diffs?: { field: string; model_a: unknown; model_b: unknown }[];
-  winner?: { accuracy: string; basis?: "accuracy" | "completeness"; speed: string };
+  winner?: { accuracy: string; basis?: "accuracy" | "completeness"; tie?: boolean; speed: string };
   raw_results: Record<string, ExtractionResult>;
 }
 

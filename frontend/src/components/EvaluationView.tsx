@@ -27,12 +27,13 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
   const [a, b] = runs;
 
   const best = winner && byName[winner.accuracy];
-  const bestSub =
+  const bestScore =
     best && winner.basis === "accuracy" && best.accuracy
       ? `${best.accuracy.accuracy_pct}% of fields correct`
       : best
         ? `${completeness(best).overall_pct}% of fields filled`
         : undefined;
+  const bestSub = winner?.tie && bestScore ? `Both ${bestScore}` : bestScore;
 
   return (
     <div className="space-y-6">
@@ -40,7 +41,7 @@ export function EvaluationView({ report }: { report: EvaluationReport }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Stat
             label={winner.basis === "accuracy" ? "Most accurate" : "Most complete"}
-            value={winner.accuracy}
+            value={winner.tie ? "Tie" : winner.accuracy}
             sub={bestSub}
           />
           <Stat label="Fastest" value={winner.speed} sub={`${byName[winner.speed].elapsed_s.toFixed(1)} s`} />

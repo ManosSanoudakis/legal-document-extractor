@@ -133,7 +133,7 @@ def run_evaluation(
     Args:
         pdf_path:  Path to the input PDF.
         api_key:   Gemini API key.
-        models:    Models to benchmark (default: flash + pro).
+        models:    Models to benchmark (default: GeminiExtractor.MODELS).
         truth:     Ground-truth deed. When given, each model is also scored
                    on field-level accuracy, which decides the winner.
 
@@ -172,13 +172,17 @@ def run_evaluation(
     if len(runs) == 2 and not any(r.error for r in runs):
         report["field_diffs"] = field_diff(runs[0].raw, runs[1].raw)
         if truth is not None:
-            best = max(runs, key=lambda r: r.accuracy["accuracy_pct"])
+            score = lambda r: r.accuracy["accuracy_pct"]  # noqa: E731
         else:
-            best = max(runs, key=lambda r: r.completeness.get("overall_pct", 0))
+            score = lambda r: r.completeness.get("overall_pct", 0)  # noqa: E731
+        fastest = min(runs, key=lambda r: r.elapsed)
+        tie = score(runs[0]) == score(runs[1])
         report["winner"] = {
-            "accuracy": best.model,
+            # On a tie the faster model wins, not whichever happens to be listed first
+            "accuracy": fastest.model if tie else max(runs, key=score).model,
             "basis": "accuracy" if truth is not None else "completeness",
-            "speed": min(runs, key=lambda r: r.elapsed).model,
+            "tie": tie,
+            "speed": fastest.model,
         }
 
     report["raw_results"] = {r.model: r.raw for r in runs}
@@ -223,6 +227,7 @@ if __name__ == "__main__":
 
     if "winner" in report:
         w = report["winner"]
-        print(f"\nMost {w['basis']}: {w['accuracy']}  |  Fastest: {w['speed']}")
+        best = f"tie (faster: {w['accuracy']})" if w["tie"] else w["accuracy"]
+        print(f"\nMost {w['basis']}: {best}  |  Fastest: {w['speed']}")
 
     print(f"\nFull report saved to {out}")

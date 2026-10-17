@@ -35,9 +35,10 @@ HTTP_OPTIONS = types.HttpOptions(
     ),
 )
 
-# First model is the default. Override with a comma-separated GEMINI_MODELS
-# env var when Google retires or renames models.
-DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.1-pro-preview"]
+# First model is the default. Both defaults are on Gemini's free tier (Pro has
+# no free quota). Override with a comma-separated GEMINI_MODELS env var, e.g.
+# to compare against Pro on a paid key, or when Google retires a model.
+DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
 MODELS = [m.strip() for m in os.environ.get("GEMINI_MODELS", "").split(",") if m.strip()] or DEFAULT_MODELS
 
 # ---------------------------------------------------------------------------
