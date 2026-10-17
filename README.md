@@ -8,10 +8,13 @@ A full-stack application that extracts structured data from Greek notarial deeds
 
 ## Overview
 
-The pipeline converts a PDF into page images, sends them to a Vision Language Model (VLM), and returns a structured JSON object with all key information from the deed — parties, property details, transaction data, and notary information.
+The pipeline converts a PDF into page images (plus the PDF's own text, when it has one), sends them to a Vision Language Model (VLM), and returns a structured JSON object with all key information from the deed — parties, property details, transaction data, and notary information.
 
 - **Schema-enforced output**: Gemini's structured output mode constrains the response to a Pydantic schema, so every response has the same shape.
-- **Automatic checks**: every extraction is validated (ΑΦΜ check digits, ΚΑΕΚ format, impossible dates, non-positive amounts) and problems are shown next to the results.
+- **Automatic checks**: every extraction is validated (ΑΦΜ check digits, ΚΑΕΚ format, impossible dates, non-positive amounts) and problems are shown next to the results. For a digital PDF, every copied number and name is also looked up in the PDF's text, which catches a misread digit that still looks valid.
+- **Review list and second look**: flagged values form a to-do list with a tick per field. "Second look" reads only those fields again at higher resolution, without showing the model its first answer, and shows whether the two readings agree.
+- **Batch and background jobs**: up to 20 deeds at once, processed in the background with a live progress table, and exported together as one spreadsheet.
+- **History**: every result is saved with the user's corrections and review ticks — the extracted values only, never the PDF.
 - **Measured accuracy**: a labelled set of fictional deeds gives field-level accuracy, not just a count of filled-in fields.
 - **Model comparison**: Gemini Flash and Flash-Lite run side by side on the same document, scored on accuracy, completeness and latency. Both are on the free tier; Pro can be added on a paid key.
 - **Source for every value**: the model cites the page and exact text each value came from; one click shows that page in the preview.
@@ -21,9 +24,9 @@ The pipeline converts a PDF into page images, sends them to a Vision Language Mo
 
 <sub>Screenshots use the fictional sample deed with demo data (no model call). Regenerate them from a real run with `python scripts/screenshots.py` and a `GEMINI_API_KEY`.</sub>
 
-| Source quotes | Editing |
-|---|---|
-| ![Sources tab with page links and quotes](docs/screenshots/sources.png) | ![Edit mode with input fields](docs/screenshots/editing.png) |
+| Source quotes | Editing | Batch |
+|---|---|---|
+| ![Sources tab with page links and quotes](docs/screenshots/sources.png) | ![Edit mode with input fields](docs/screenshots/editing.png) | ![Batch tab with a progress table](docs/screenshots/batch.png) |
 
 ---
 
@@ -31,14 +34,18 @@ The pipeline converts a PDF into page images, sends them to a Vision Language Mo
 
 ```
 PDF
- └── pdf_to_images()        # PyMuPDF → JPEG pages (temporary, deleted after use)
+ ├── pdf_to_images()        # PyMuPDF → JPEG pages (temporary, deleted after use)
+ └── pdf_page_texts()       # the PDF's text layer per page ("" for a scanned page)
       └── BaseExtractor
-           └── GeminiExtractor.extract()   # images + prompt → JSON constrained by schema.Deed
-                ├── validate_deed()        # ΑΦΜ, ΚΑΕΚ, date and amount checks → _validation
-                └── run_pipeline()         # public entry point
+           └── GeminiExtractor.extract()   # images + text + prompt → JSON constrained by schema.Deed
+                ├── validate_deed()        # ΑΦΜ, ΚΑΕΚ, date, amount and text-layer checks → _validation
+                ├── run_pipeline()         # public entry point
+                └── run_recheck()          # second look at flagged fields, 300 dpi, cited pages only
                      ├── evaluate.py       # Flash vs Flash-Lite on one document (+ accuracy if truth known)
-                     ├── benchmark.py      # accuracy over the labelled dataset
+                     ├── benchmark.py      # accuracy over a labelled dataset
                      └── api.py            # FastAPI REST endpoints
+                          ├── jobs.py      # background jobs: one document at a time, progress per document
+                          ├── history.py   # SQLite: results, corrections, review ticks (never PDFs)
                           └── frontend/    # React UI (served by nginx, proxies /api)
 ```
 
@@ -53,6 +60,18 @@ Browser ──▶ nginx (web, :8080) ──/api──▶ FastAPI (api, :8000) �
 
 ### Why a VLM instead of a PDF text parser?
 Greek notarial deeds are often scanned documents — plain text extraction via `pdfplumber` or `pdfminer` fails on scanned pages. A VLM reads the document visually, the same way a human would.
+
+### Why send the PDF's text as well, when there is one?
+An image can be misread; a digital PDF's text cannot. The model gets both: the image for layout and the text for exact characters. In a run on the long deeds, the only two serious mistakes were misread ΚΑΕΚ digits (one pair swapped, one digit dropped). Looking every copied value up in the text catches both, with no false alarms on the true values of any labelled deed. Lines repeated on every page (headers, watermarks) are removed first, or they land in the middle of a value that runs onto the next page.
+
+### Why a "second look" instead of an agent?
+An agent loop (think → call a tool → think) costs several model calls per document and is hard to measure. The errors that remain are few and already flagged, so one extra call is enough: only the flagged fields, only the pages they were cited on, at 300 dpi, and without the first answer in the prompt so the second reading cannot simply repeat it.
+
+### Why background jobs?
+An extraction takes 20–80 seconds. Holding an HTTP request open that long risks proxy and browser timeouts and shows the user nothing. A job returns at once; the browser polls each document's stage. Documents in a batch run one at a time because free-tier limits are per minute and per day, and a rejected key or exhausted quota stops the rest of the job instead of failing once per document.
+
+### Why store results but not PDFs?
+A deed is full of personal data. History keeps what the user needs to come back to (the extracted values, their corrections and which flags they checked) and nothing more. `HISTORY_RETENTION_DAYS` deletes old entries. The app has no login, so everyone who can reach it sees the same history: run it locally or behind your own access control.
 
 ### Why Gemini?
 Google AI Studio's free tier covers Gemini Flash and Flash-Lite with vision and structured output, so anyone can run the app and its evaluation without billing. (Pro has no free-tier quota; set `GEMINI_MODELS` to include it on a paid key.) The architecture supports adding other providers (e.g. GPT-4o) by extending `BaseExtractor`.
@@ -97,7 +116,9 @@ The same ten deeds also exist as **simulated scans** in `samples/dataset_scanned
 
 The short deeds state each value once, so strong and weak models score alike. **Long deeds** in `samples/dataset_long/` (6–8 pages, in larger, widely spaced type like real deeds) keep the same kind of correct answers but surround them with look-alike values: a title history of earlier owners, deed numbers, notaries, dates and prices; other units in the building with their own areas and ΚΑΕΚ; lawyers and an engineer with tax IDs; the assessed value next to the price; tax, mortgage and fee amounts; and a list of attached documents with their own numbers and dates. A model that picks up a look-alike value is marked wrong.
 
-**Limitation**: real deeds also have stamps, signatures, handwriting and photocopy artefacts that the simulation does not reproduce, so accuracy on real documents will likely be lower still.
+All of these share one template, so a model could do well by learning its wording. **Varied deeds** in `samples/dataset_varied/` are long deeds that also change wording and layout: headings (ΠΡΩΤΟ / Άρθρο 1 / 1.), parties as prose or as «Α.Φ.Μ.: …» fields or with birth year and tax office, dates with the weekday or as 15/3/2024, amounts as «185.000 ευρώ» or «ευρώ 185.000,00», and the sections in another order. Their **harsh scans** in `samples/dataset_varied_scanned/` add what real scans carry: a notary stamp over the text, signatures, a handwritten number in the margin, photocopier streaks, more rotation and lower resolution.
+
+**Limitation**: the deeds are still generated. Real deeds vary more, and real handwriting is not simulated, so accuracy on real documents will likely be lower.
 
 ---
 
@@ -112,12 +133,16 @@ The short deeds state each value once, so strong and weak models score alike. **
 ├── accuracy.py                     # Field-level scoring against ground truth
 ├── evaluate.py                     # Flash vs Flash-Lite on one document
 ├── benchmark.py                    # Accuracy over the labelled dataset
-├── export.py                       # Excel / CSV export
+├── export.py                       # Excel / CSV export, one deed or many
+├── jobs.py                         # Background extraction jobs with progress
+├── history.py                      # Saved results (SQLite), never PDFs
 ├── samples/
 │   ├── sample_deed.pdf / .json     # Fictional demo deed + its correct values
 │   ├── dataset/                    # 10 more fictional deeds, each with a .json
 │   ├── dataset_scanned/            # The same 10 as simulated scans
 │   ├── dataset_long/               # 10 long deeds full of look-alike values
+│   ├── dataset_varied/             # 10 long deeds in varied wording and layout
+│   ├── dataset_varied_scanned/     # The same 10 as harsh scans (stamps, signatures, notes)
 │   └── make_sample_deed.py         # Script that generates them
 ├── tests/                          # pytest suite (no API key needed)
 ├── scripts/screenshots.py          # Regenerates docs/screenshots/
@@ -136,7 +161,7 @@ The short deeds state each value once, so strong and weak models score alike. **
 └── requirements-dev.txt            # + pytest, ruff
 ```
 
-> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and all datasets with `python samples/make_sample_deed.py --dataset 10 --scanned --long 10`.
+> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and all datasets with `python samples/make_sample_deed.py --dataset 10 --scanned --long 10 --varied 10 --harsh`.
 
 ---
 
@@ -178,7 +203,11 @@ python evaluate.py  --pdf samples/sample_deed.pdf --truth samples/sample_deed.js
 python benchmark.py                # accuracy over samples/dataset, saved to benchmark_results.json
 python benchmark.py --dataset samples/dataset_scanned --output benchmark_scanned.json
 python benchmark.py --dataset samples/dataset_long --output benchmark_long.json
+python benchmark.py --dataset samples/dataset_varied --output benchmark_varied.json
+python benchmark.py --dataset samples/dataset_varied_scanned --output benchmark_varied_scanned.json
 ```
+
+`benchmark.py` saves each model's raw output, so a change to the scoring can be re-applied later without new API calls. Add `--models gemini-3.8-flash` to spend only one model's quota.
 
 ### Tests and linting
 
@@ -209,12 +238,19 @@ docker compose up --build                                    # docker-compose.ym
 |---|---|---|
 | `GET` | `/api/config` | Available models, limits, whether the sample exists |
 | `GET` | `/api/sample` | The fictional sample deed (PDF) |
-| `POST` | `/api/extract` | Multipart: `file` or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. |
+| `POST` | `/api/extract` | Multipart: `file` or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. Waits for the result. |
+| `POST` | `/api/jobs` | Multipart: one or more `files` (up to 20) or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. Returns a job at once. |
+| `GET` | `/api/jobs/{id}` | Progress: each document's stage, time and a short summary. Finished jobs are kept for an hour. |
+| `GET` | `/api/jobs/{id}/documents/{doc}` | One document's full result. |
+| `POST` | `/api/recheck` | Multipart: the document, `deed` (JSON) and `fields` (JSON list of paths). One call that reads those fields again. |
+| `GET` | `/api/history` | Saved results, newest first, with what is left to check. |
+| `GET` / `PUT` / `DELETE` | `/api/history/{id}` | One saved result: read it, save corrections and review ticks, or delete it. |
 | `POST` | `/api/evaluate` | Multipart: `file` or `use_sample=true`. Header `X-Gemini-Key`. For the sample, also scores accuracy against its known answers. |
 | `POST` | `/api/validate` | JSON deed (e.g. after manual corrections). Returns `{"issues": [...]}`. |
 | `POST` | `/api/export?format=xlsx\|csv` | JSON deed. Returns an Excel file (sheets *Deed* and *People*) or a CSV. |
+| `POST` | `/api/export/batch?format=xlsx\|csv` | `{"deeds": [{"name": ..., "deed": ...}]}`. One row per deed (sheets *Deeds* and *People*). |
 
-Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Busy (429) and server (5xx) errors from Gemini are retried up to 3 times with backoff. Every extraction response includes `sources` (page and quote per value), `_validation` (failed checks, empty when all pass) and `_meta` (model, pages, seconds).
+Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Busy (429) and server (5xx) errors from Gemini are retried up to 3 times with backoff. Every extraction response includes `sources` (page and quote per value), `_validation` (failed checks, empty when all pass) and `_meta` (model, pages, whether the text layer was used, seconds, and the history id).
 
 ---
 
@@ -224,10 +260,10 @@ Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tok
 2. Paste it into **Settings** and pick a model (Flash: stronger / Flash-Lite: faster, larger free quota)
 3. Keep the **Sample deed** selected, or switch to **Upload PDF** and drop in your own deed
 4. Click **Extract**
-5. Check flagged values: hover a page link (**p. 1**) to see the quote, click it to open that page in the preview
-6. Click **Edit values** to correct anything, then download **Excel** or **CSV**
+5. Work through the flagged values: hover a page link (**p. 1**) to see the quote, click it to open that page, tick each field once checked. **Second look** reads the flagged fields again (one request)
+6. Click **Edit values** to correct anything, then download **Excel** or **CSV**. Corrections and ticks are saved to history as you go
 
-To benchmark both models, open the **Model evaluation** tab and click **Run evaluation**.
+For many deeds, use the **Batch** tab: drop up to 20 PDFs, follow the progress, open any result, and download all of them as one spreadsheet. The **History** tab lists every earlier result. To benchmark both models, open the **Model evaluation** tab and click **Run evaluation**.
 
 ---
 
@@ -249,7 +285,7 @@ To benchmark both models, open the **Model evaluation** tab and click **Run eval
 - A deed may have multiple sellers, buyers, and legal representatives — all are extracted as lists.
 - In parental provision deeds, the parent is treated as the seller and the child as the buyer.
 - If a field is not found in the document, it is returned as `null`.
-- Uploaded PDFs and page images are written to temporary files and deleted after each request, so no document data is kept on disk.
+- Uploaded PDFs and page images are written to temporary files and deleted after processing; only the extracted results go to history.
 
 ---
 
@@ -260,6 +296,6 @@ To benchmark both models, open the **Model evaluation** tab and click **Run eval
 - **Add or remove parties while editing**: editing currently changes existing values only
 - **Native PDF input**: Gemini accepts PDFs directly, which would remove the image conversion step
 - **Multi-document support**: different schemas and prompts per document type (lease, will, etc.)
-- **Async processing**: parallel page processing for large documents
 - **Authentication & usage limits**: needed before hosting the app publicly (see `TODO: SECURITY` in `api.py`)
 - **Confidence scores**: prompt the model to return a confidence value per field
+- **Mixed PDFs**: the text check runs only when every page has text; a deed with some scanned pages could check the pages that do

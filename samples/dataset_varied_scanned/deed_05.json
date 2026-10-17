@@ -1,0 +1,38 @@
+{
+  "notary": {
+    "name": "Κωνσταντίνος Δοκιμαστής",
+    "location": "Αθήνα",
+    "registry_number": "1.973"
+  },
+  "sellers": [
+    {
+      "full_name": "Βασιλική Δοκιμαστή του Χρήστου",
+      "tax_id": "551314420",
+      "id_document": "ΑΚ 302969",
+      "address": "Οδός Ανύπαρκτης 39, Αθήνα"
+    }
+  ],
+  "buyers": [
+    {
+      "full_name": "Ιωάννης Παράδειγμα του Κωνσταντίνου",
+      "tax_id": "352582384",
+      "id_document": "ΑΚ 550269",
+      "address": "Οδός Ανύπαρκτης 100, Αθήνα"
+    }
+  ],
+  "legal_representatives": [],
+  "property": {
+    "type": "διαμέρισμα",
+    "address": "Οδός Ανύπαρκτης 21, Αθήνα",
+    "municipal_unit": "Δημοτική Ενότητα Ζωγράφου",
+    "floor": "4ος όροφος",
+    "area_sqm": 42.75,
+    "kaek": "997760545705/0/8",
+    "building_permit": "3853/1988 του Πολεοδομικού Γραφείου Δοκιμών"
+  },
+  "transaction": {
+    "deed_type": "parental_provision",
+    "price": null,
+    "date": "2024-03-28"
+  }
+}
