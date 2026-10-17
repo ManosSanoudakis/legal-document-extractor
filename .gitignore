@@ -15,6 +15,7 @@ __pycache__/
 !samples/dataset_varied/*.pdf
 !samples/dataset_varied_scanned/*.pdf
 !samples/demo/*.pdf
+!samples/dataset_holdout/*.pdf
 
 # Extracted outputs
 data/
