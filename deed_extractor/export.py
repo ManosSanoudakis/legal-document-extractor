@@ -32,6 +32,15 @@ DETAIL_FIELDS = [
 ROLES = [("sellers", "Seller"), ("buyers", "Buyer"), ("legal_representatives", "Representative")]
 PEOPLE_COLUMNS = ["Role", "Name", "Tax ID (ΑΦΜ)", "ID document", "Address", "Represents"]
 
+# Excel runs a cell starting with one of these as a formula (CSV / formula injection).
+# Every value comes from the document or the user, so none is trusted: a leading
+# apostrophe makes it plain text.
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def cells(row: list) -> list:
+    return ["'" + v if isinstance(v, str) and v.startswith(FORMULA_START) else v for v in row]
+
 
 def detail_rows(deed: dict) -> list[list]:
     return [
@@ -52,11 +61,11 @@ def to_csv(deed: dict) -> bytes:
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(["Section", "Field", "Value"])
-    writer.writerows(detail_rows(deed))
+    writer.writerows(cells(row) for row in detail_rows(deed))
     for key, role in ROLES:
         for i, p in enumerate(deed.get(key) or [], start=1):
             for field, value in p.items():
-                writer.writerow([f"{role} {i}", field, value])
+                writer.writerow(cells([f"{role} {i}", field, value]))
     # BOM so Excel opens the Greek text as UTF-8
     return ("﻿" + out.getvalue()).encode("utf-8")
 
@@ -81,12 +90,12 @@ def to_xlsx(deed: dict) -> bytes:
     details.title = "Deed"
     details.append(["Section", "Field", "Value"])
     for row in detail_rows(deed):
-        details.append(row)
+        details.append(cells(row))
 
     people = wb.create_sheet("People")
     people.append(PEOPLE_COLUMNS)
     for row in people_rows(deed):
-        people.append(row)
+        people.append(cells(row))
 
     _style(details, [14, 18, 60])
     _style(people, [16, 40, 16, 16, 45, 40])
@@ -113,7 +122,7 @@ def batch_to_csv(deeds: list[tuple[str, dict]]) -> bytes:
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(BATCH_COLUMNS)
-    writer.writerows(batch_rows(deeds))
+    writer.writerows(cells(row) for row in batch_rows(deeds))
     return ("﻿" + out.getvalue()).encode("utf-8")
 
 
@@ -123,13 +132,13 @@ def batch_to_xlsx(deeds: list[tuple[str, dict]]) -> bytes:
     table.title = "Deeds"
     table.append(BATCH_COLUMNS)
     for row in batch_rows(deeds):
-        table.append(row)
+        table.append(cells(row))
 
     people = wb.create_sheet("People")
     people.append(["File", *PEOPLE_COLUMNS])
     for name, deed in deeds:
         for row in people_rows(deed):
-            people.append([name, *row])
+            people.append(cells([name, *row]))
 
     _style(table, [28] + [18] * len(DETAIL_FIELDS) + [45, 45])
     _style(people, [28, 16, 40, 16, 16, 45, 40])

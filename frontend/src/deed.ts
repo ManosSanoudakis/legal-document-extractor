@@ -21,7 +21,7 @@ export function setPath(deed: Deed, path: string, value: unknown): Deed {
   const [section, index, key] = parse(path);
   const node = (deed as Node)[section];
   if (index === null) {
-    return { ...deed, [section]: { ...((node as Node) ?? {}), [key]: value } };
+    return { ...deed, [section]: { ...(node as Node), [key]: value } };
   }
   const list = Array.isArray(node) ? [...node] : [];
   list[index] = { ...(list[index] as Node), [key]: value };

@@ -22,9 +22,9 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
   const [results, setResults] = useState<Record<string, ExtractionResult>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  // The user's corrections, by document id; the export uses them over the raw results
-  const edits = useRef<Record<string, Deed>>({});
-  const checked = useRef<Record<string, string[]>>({});
+  // The user's corrections and checked fields, by document id; the export uses the corrections
+  const [edits, setEdits] = useState<Record<string, Deed>>({});
+  const [checked, setChecked] = useState<Record<string, string[]>>({});
 
   const running = job?.status === "running";
 
@@ -49,8 +49,8 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
     setError(null);
     setResults({});
     setOpen(null);
-    edits.current = {};
-    checked.current = {};
+    setEdits({});
+    setChecked({});
     setJobFiles(files);
     try {
       const created = await createJob(files, apiKey, { task: "extract", model });
@@ -85,7 +85,7 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
       const done = job.documents.filter((d) => d.status === "done");
       const loaded = await Promise.all(done.map((d) => load(d)));
       await exportBatch(
-        done.map((d, i) => ({ name: d.filename, deed: edits.current[d.id] ?? loaded[i]!.deed })),
+        done.map((d, i) => ({ name: d.filename, deed: edits[d.id] ?? loaded[i]!.deed })),
         format,
       );
     } catch (err) {
@@ -178,13 +178,9 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
           <ResultsView
             key={openDoc.id}
             result={results[openDoc.id]}
-            saved={{ edited: edits.current[openDoc.id] ?? null, reviewed: checked.current[openDoc.id] ?? [] }}
-            onChange={(deed) => {
-              edits.current[openDoc.id] = deed;
-            }}
-            onReviewedChange={(fields) => {
-              checked.current[openDoc.id] = fields;
-            }}
+            saved={{ edited: edits[openDoc.id] ?? null, reviewed: checked[openDoc.id] ?? [] }}
+            onChange={(deed) => setEdits((e) => ({ ...e, [openDoc.id]: deed }))}
+            onReviewedChange={(fields) => setChecked((c) => ({ ...c, [openDoc.id]: fields }))}
             onRecheck={
               fileFor(openDoc) && apiKey.trim()
                 ? (deed, fields) => recheck({ kind: "upload", file: fileFor(openDoc) }, model, apiKey.trim(), deed, fields)

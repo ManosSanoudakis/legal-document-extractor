@@ -1,11 +1,7 @@
-# TODO: SECURITY — run llm-secure-patterns to apply LLM security patterns
-#
-# This API has no authentication and is meant to run locally. Each caller
-# supplies their own Gemini key (X-Gemini-Key header); no key is stored
-# server-side. Basic input limits (file size, page count) and an output-token
-# cap (extractor.MAX_OUTPUT_TOKENS) are in place. Extracted results (never the
-# PDFs) are kept in a local history database that everyone using this server
-# can see; HISTORY_RETENTION_DAYS deletes old entries.
+# The API has no logins and is meant to run locally or behind your own access
+# control: everyone who can reach it shares one history. Each caller sends their
+# own Gemini key per request (X-Gemini-Key); it is never stored or logged. See
+# "Security" in the README for what is protected and what a hosted version needs.
 from __future__ import annotations
 
 import json
@@ -22,7 +18,7 @@ from fastapi import Body, FastAPI, File, Form, Header, HTTPException, Query, Upl
 from fastapi.responses import FileResponse, Response
 
 from . import demo
-from .evaluate import run_evaluation
+from .evaluate import EvaluationReport, run_evaluation
 from .export import batch_to_csv, batch_to_xlsx, to_csv, to_xlsx
 from .extractor import MAX_RECHECK_FIELDS, GeminiExtractor, recheck_lines, run_pipeline, run_recheck
 from .history import History
@@ -133,13 +129,13 @@ def extract_task(api_key: str, model: str) -> Task:
 
 
 def evaluate_task(api_key: str, truth: dict | None, filename: str) -> Task:
-    def run(data: bytes, on_stage) -> dict:
+    def run(data: bytes, on_stage) -> EvaluationReport:
         with pdf_on_disk(data) as path:
             # If every model fails the same way (e.g. a rejected key), the job reports that error
             report = run_evaluation(
                 pdf_path=path, api_key=api_key, truth=truth, on_stage=on_stage, raise_if_all_failed=True,
             )
-        report["pdf"] = filename
+        report.pdf = filename
         return report
     return run
 

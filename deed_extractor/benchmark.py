@@ -83,8 +83,8 @@ def main() -> None:
         logger.info("[%d/%d] %s", i, len(dataset), pdf.name)
         # raw_results are kept so a change to the scoring can be re-applied without new API calls
         report = run_evaluation(str(pdf), api_key, models=models, truth=truth)
-        report["pdf"] = pdf.name
-        per_doc.append(report)
+        report.pdf = pdf.name
+        per_doc.append(report.model_dump(mode="json"))
 
     summary = summarise(per_doc, models)
     args.output.write_text(

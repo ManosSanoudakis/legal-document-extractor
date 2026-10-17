@@ -105,7 +105,8 @@ export interface Completeness {
 export interface ModelRun {
   model: string;
   elapsed_s: number;
-  completeness: Completeness | Record<string, never>;
+  /** null if the run failed */
+  completeness: Completeness | null;
   accuracy?: Accuracy | null;
   checks_failed?: number;
   error: string | null;
