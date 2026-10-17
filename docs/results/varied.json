@@ -1,0 +1,2511 @@
+{
+  "summary": {
+    "gemini-3.8-flash": {
+      "documents": 10,
+      "failed": 0,
+      "accuracy_pct": 100.0,
+      "perfect_documents": 10,
+      "median_seconds": 26.53,
+      "checks_failed": 37,
+      "most_missed": []
+    }
+  },
+  "documents": [
+    {
+      "pdf": "deed_01.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 28.63,
+          "completeness": {
+            "scalar_pct": 92.3,
+            "list_pct": 100.0,
+            "overall_pct": 96.6,
+            "filled": 28,
+            "total": 29
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 29,
+            "total": 29,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 4,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Βασιλική Φανταστική",
+              "location": "Πάτρα",
+              "registry_number": "39.736"
+            },
+            "sellers": [
+              {
+                "full_name": "Δήμητρα Δοκιμαστή του Νικολάου",
+                "tax_id": "627622301",
+                "id_document": "ΑΗ 581194",
+                "address": "Οδός Υποθέσεων 90, Πάτρα"
+              },
+              {
+                "full_name": "Ελένη Δείγμα του Δημητρίου",
+                "tax_id": "614364503",
+                "id_document": "ΑΜ 963594",
+                "address": "Λεωφόρος Δοκιμών 27, Πάτρα"
+              },
+              {
+                "full_name": "Γεώργιος Δείγμα του Χρήστου",
+                "tax_id": "203619019",
+                "id_document": "ΑΚ 939327",
+                "address": "Οδός Πλασματικής 109, Πάτρα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Ελένη Φανταστική του Ιωάννη",
+                "tax_id": "978361631",
+                "id_document": "ΑΧ 962233",
+                "address": "Οδός Ανύπαρκτης 65, Πειραιάς"
+              }
+            ],
+            "legal_representatives": [],
+            "property": {
+              "type": "μονοκατοικία",
+              "address": "Λεωφόρος Δοκιμών 95, Πάτρα",
+              "municipal_unit": "Δημοτική Ενότητα Ρίου",
+              "floor": null,
+              "area_sqm": 55.09,
+              "kaek": "996329805899/0/1",
+              "building_permit": "5788/1982 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 414000.0,
+              "date": "2015-01-09"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ενώπιον εμού (Βασιλική Φανταστική, συμβολαιογράφου με έδρα την Πάτρα)"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφου με έδρα την Πάτρα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 39.736"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Δήμητρα Δοκιμαστή του Νικολάου, που γεννήθηκε το 1942"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 627622301 (Δ.Ο.Υ. Ψυχικού)"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΗ 581194 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Υποθέσεων 90, Πάτρα"
+              },
+              {
+                "field": "sellers[1].full_name",
+                "page": 1,
+                "quote": "2) Ελένη Δείγμα του Δημητρίου, που γεννήθηκε το 1941"
+              },
+              {
+                "field": "sellers[1].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 614364503 (Δ.Ο.Υ. Δ' Θεσσαλονίκης)"
+              },
+              {
+                "field": "sellers[1].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΜ 963594 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "sellers[1].address",
+                "page": 1,
+                "quote": "κάτοικος Λεωφόρος Δοκιμών 27, Πάτρα"
+              },
+              {
+                "field": "sellers[2].full_name",
+                "page": 1,
+                "quote": "3) Γεώργιος Δείγμα του Χρήστου, που γεννήθηκε το 1960"
+              },
+              {
+                "field": "sellers[2].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 203619019 (Δ.Ο.Υ. Δ' Θεσσαλονίκης)"
+              },
+              {
+                "field": "sellers[2].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΚ 939327 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "sellers[2].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Πλασματικής 109, Πάτρα"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "4) Ελένη Φανταστική του Ιωάννη, που γεννήθηκε το 1977"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 978361631 (Δ.Ο.Υ. Ψυχικού)"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΧ 962233 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Ανύπαρκτης 65, Πειραιάς"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "συγκύριοι ενός ακινήτου (μονοκατοικία)"
+              },
+              {
+                "field": "property.address",
+                "page": 2,
+                "quote": "βρίσκεται στη διεύθυνση Λεωφόρος Δοκιμών 95, Πάτρα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 2,
+                "quote": "στη Δημοτική Ενότητα Ρίου"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "εμβαδού 55,09 τ.μ."
+              },
+              {
+                "field": "property.kaek",
+                "page": 2,
+                "quote": "φέρει Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 996329805899/0/1"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 2,
+                "quote": "δυνάμει της υπ' αριθμ. 5788/1982 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 3,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 414.000 ευρώ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στην Πάτρα σήμερα, την 9η Ιανουαρίου του έτους 2015"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 6,
+            "text_layer": true,
+            "elapsed_seconds": 28.63,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "627622301",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[1].tax_id",
+              "value": "614364503",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[2].tax_id",
+              "value": "203619019",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "978361631",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_02.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 30.42,
+          "completeness": {
+            "scalar_pct": 100.0,
+            "list_pct": 100.0,
+            "overall_pct": 100.0,
+            "filled": 33,
+            "total": 33
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 33,
+            "total": 33,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 5,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Παναγιώτης Υποθετικός",
+              "location": "Ηράκλειο",
+              "registry_number": "36.050"
+            },
+            "sellers": [
+              {
+                "full_name": "Σοφία Παράδειγμα του Νικολάου",
+                "tax_id": "483130501",
+                "id_document": "ΑΧ 526750",
+                "address": "Οδός Ανύπαρκτης 60, Ηράκλειο"
+              },
+              {
+                "full_name": "Αικατερίνη Δοκιμαστή του Αθανασίου",
+                "tax_id": "698285543",
+                "id_document": "ΑΧ 864096",
+                "address": "Οδός Πλασματικής 84, Ηράκλειο"
+              },
+              {
+                "full_name": "Γεωργία Φανταστική του Κωνσταντίνου",
+                "tax_id": "877325259",
+                "id_document": "ΑΝ 598497",
+                "address": "Οδός Φανταστικής 2, Ηράκλειο"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Ευαγγελία Υποθετική του Γεωργίου",
+                "tax_id": "538263839",
+                "id_document": "ΑΝ 563880",
+                "address": "Οδός Ανύπαρκτης 59, Ηράκλειο"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Παναγιώτης Πλασματικός του Νικολάου",
+                "represents": "Ευαγγελία Υποθετική του Γεωργίου",
+                "tax_id": "993542546",
+                "id_document": "ΑΝ 029465"
+              }
+            ],
+            "property": {
+              "type": "διαμέρισμα",
+              "address": "Λεωφόρος Δοκιμών 104, Ηράκλειο",
+              "municipal_unit": "Ηρακλείου",
+              "floor": "4ος όροφος",
+              "area_sqm": 37.77,
+              "kaek": "996381291543/0/7",
+              "building_permit": "8710/1986 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 583500.0,
+              "date": "2020-08-12"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ενώπιον εμού (Παναγιώτης Υποθετικός, συμβολαιογράφου με έδρα το Ηράκλειο)"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφου με έδρα το Ηράκλειο"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 36.050"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Σοφία Παράδειγμα του Νικολάου"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 60, Ηράκλειο"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 483130501"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΧ 526750"
+              },
+              {
+                "field": "sellers[1].full_name",
+                "page": 1,
+                "quote": "2) Αικατερίνη Δοκιμαστή του Αθανασίου"
+              },
+              {
+                "field": "sellers[1].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Πλασματικής 84, Ηράκλειο"
+              },
+              {
+                "field": "sellers[1].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 698285543"
+              },
+              {
+                "field": "sellers[1].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΧ 864096"
+              },
+              {
+                "field": "sellers[2].full_name",
+                "page": 1,
+                "quote": "3) Γεωργία Φανταστική του Κωνσταντίνου"
+              },
+              {
+                "field": "sellers[2].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Φανταστικής 2, Ηράκλειο"
+              },
+              {
+                "field": "sellers[2].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 877325259"
+              },
+              {
+                "field": "sellers[2].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΝ 598497"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "4) Ευαγγελία Υποθετική του Γεωργίου"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 59, Ηράκλειο"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 538263839"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΝ 563880"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "πληρεξούσιο: Παναγιώτης Πλασματικός του Νικολάου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "Ευαγγελία Υποθετική του Γεωργίου — κάτοικος: Οδός Ανύπαρκτης 59, Ηράκλειο · Α.Φ.Μ.: 538263839 · Δ.Α.Τ.: ΑΝ 563880 · εκπροσωπείται από πληρεξούσιο: Παναγιώτης Πλασματικός του Νικολάου"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "(Α.Φ.Μ.: 993542546,"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΝ 029465)"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "Οι πωλητές είναι συγκύριοι ενός ακινήτου (διαμέρισμα)"
+              },
+              {
+                "field": "property.address",
+                "page": 2,
+                "quote": "που βρίσκεται στη διεύθυνση Λεωφόρος Δοκιμών 104, Ηράκλειο"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 2,
+                "quote": "στη Δημοτική Ενότητα Ηρακλείου"
+              },
+              {
+                "field": "property.floor",
+                "page": 2,
+                "quote": "4ος όροφος"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 2,
+                "quote": "εμβαδού 37,77 τετραγωνικών μέτρων (τ.μ.)"
+              },
+              {
+                "field": "property.kaek",
+                "page": 2,
+                "quote": "(ΚΑΕΚ) 996381291543/0/7"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 2,
+                "quote": "υπ' αριθμ. 8710/1986 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 7,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 583.500 ευρώ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "την 12η Αυγούστου του έτους 2020"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 8,
+            "text_layer": true,
+            "elapsed_seconds": 30.42,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "483130501",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[1].tax_id",
+              "value": "698285543",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[2].tax_id",
+              "value": "877325259",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "538263839",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "993542546",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_03.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 25.71,
+          "completeness": {
+            "scalar_pct": 92.3,
+            "list_pct": 100.0,
+            "overall_pct": 95.2,
+            "filled": 20,
+            "total": 21
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 21,
+            "total": 21,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 2,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Δημήτριος Παράδειγμα",
+              "location": "Πάτρα",
+              "registry_number": "16.019"
+            },
+            "sellers": [
+              {
+                "full_name": "Μαρία Υποθετική του Ιωάννη",
+                "tax_id": "765905274",
+                "id_document": "ΑΗ 759283",
+                "address": "Οδός Υποθέσεων 119, Πάτρα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Χρήστος Πλασματικός του Δημητρίου",
+                "tax_id": "615061691",
+                "id_document": "ΑΚ 281513",
+                "address": "Οδός Πλασματικής 7, Αθήνα"
+              }
+            ],
+            "legal_representatives": [],
+            "property": {
+              "type": "μονοκατοικία",
+              "address": "Οδός Ανύπαρκτης 97, Πάτρα",
+              "municipal_unit": "Πατρέων",
+              "floor": null,
+              "area_sqm": 86.11,
+              "kaek": "996548806570/0/5",
+              "building_permit": "3180/1990 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 164500.0,
+              "date": "2022-03-14"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ο συμβολαιογράφος με έδρα την Πάτρα, Δημήτριος Παράδειγμα"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφος με έδρα την Πάτρα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 16.019"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "Μαρία Υποθετική του Ιωάννη"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 765905274"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΗ 759283 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Υποθέσεων 119, Πάτρα"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "Χρήστος Πλασματικός του Δημητρίου"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 615061691"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΚ 281513 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Πλασματικής 7, Αθήνα"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "ενός ακινήτου (μονοκατοικία)"
+              },
+              {
+                "field": "property.address",
+                "page": 1,
+                "quote": "στη διεύθυνση Οδός Ανύπαρκτης 97, Πάτρα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 1,
+                "quote": "στη Δημοτική Ενότητα Πατρέων"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "εμβαδού 86,11 τετραγωνικών μέτρων (τ.μ.)"
+              },
+              {
+                "field": "property.kaek",
+                "page": 1,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 996548806570/0/5"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 1,
+                "quote": "υπ' αριθμ. 3180/1990 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 2,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 164.500 ευρώ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "την 14η Μαρτίου του έτους 2022"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 6,
+            "text_layer": true,
+            "elapsed_seconds": 25.71,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "765905274",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "615061691",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_04.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 29.88,
+          "completeness": {
+            "scalar_pct": 100.0,
+            "list_pct": 100.0,
+            "overall_pct": 100.0,
+            "filled": 25,
+            "total": 25
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 25,
+            "total": 25,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 3,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Αθανάσιος Εικονικός",
+              "location": "Ηράκλειο",
+              "registry_number": "16.948"
+            },
+            "sellers": [
+              {
+                "full_name": "Χρήστος Πλασματικός του Κωνσταντίνου",
+                "tax_id": "430992804",
+                "id_document": "ΑΜ 852715",
+                "address": "Οδός Ανύπαρκτης 116, Ηράκλειο"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Ιωάννης Φανταστικός του Κωνσταντίνου",
+                "tax_id": "018824309",
+                "id_document": "ΑΙ 992341",
+                "address": "Λεωφόρος Δοκιμών 8, Πάτρα"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Αθανάσιος Εικονικός του Χρήστου",
+                "represents": "Χρήστος Πλασματικός του Κωνσταντίνου",
+                "tax_id": "132708195",
+                "id_document": "ΑΝ 603616"
+              }
+            ],
+            "property": {
+              "type": "διαμέρισμα",
+              "address": "Οδός Πλασματικής 64, Ηράκλειο",
+              "municipal_unit": "Δημοτική Ενότητα Ηρακλείου",
+              "floor": "1ος όροφος",
+              "area_sqm": 39.86,
+              "kaek": "991275531957/0/7",
+              "building_permit": "1728/1990 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 140500.0,
+              "date": "2017-12-04"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ενώπιον εμού (Αθανάσιος Εικονικός, συμβολαιογράφου με έδρα το Ηράκλειο)"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφου με έδρα το Ηράκλειο"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 16.948"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "Χρήστος Πλασματικός του Κωνσταντίνου"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 430992804"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "αριθμό δελτίου ταυτότητας ΑΜ 852715"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Ανύπαρκτης 116, Ηράκλειο"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "Αθανάσιος Εικονικός του Χρήστου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "Χρήστος Πλασματικός του Κωνσταντίνου, κάτοικος Οδός Ανύπαρκτης 116, Ηράκλειο, με Α.Φ.Μ. 430992804 και αριθμό δελτίου ταυτότητας ΑΜ 852715, που εκπροσωπείται στο παρόν από πληρεξούσιο"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 132708195"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "αριθμό δελτίου ταυτότητας ΑΝ 603616"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "Ιωάννης Φανταστικός του Κωνσταντίνου"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 018824309"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "αριθμό δελτίου ταυτότητας ΑΙ 992341"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Λεωφόρος Δοκιμών 8, Πάτρα"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "Ο πωλητής είναι κύριος ενός ακινήτου (διαμέρισμα)"
+              },
+              {
+                "field": "property.floor",
+                "page": 1,
+                "quote": "1ος όροφος"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "εμβαδού 39,86 τ.μ."
+              },
+              {
+                "field": "property.address",
+                "page": 1,
+                "quote": "που βρίσκεται στη διεύθυνση Οδός Πλασματικής 64, Ηράκλειο"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 1,
+                "quote": "στη Δημοτική Ενότητα Ηρακλείου"
+              },
+              {
+                "field": "property.kaek",
+                "page": 1,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 991275531957/0/7"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 1,
+                "quote": "υπ' αριθμ. 1728/1990 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 4,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 140.500 ευρώ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στο Ηράκλειο σήμερα, 4/12/2017"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 7,
+            "text_layer": true,
+            "elapsed_seconds": 29.88,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "430992804",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "018824309",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "132708195",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_05.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 24.05,
+          "completeness": {
+            "scalar_pct": 92.3,
+            "list_pct": 100.0,
+            "overall_pct": 95.2,
+            "filled": 20,
+            "total": 21
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 21,
+            "total": 21,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 2,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Κωνσταντίνος Δοκιμαστής",
+              "location": "Αθήνα",
+              "registry_number": "1.973"
+            },
+            "sellers": [
+              {
+                "full_name": "Βασιλική Δοκιμαστή του Χρήστου",
+                "tax_id": "551314420",
+                "id_document": "ΑΚ 302969",
+                "address": "Οδός Ανύπαρκτης 39, Αθήνα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Ιωάννης Παράδειγμα του Κωνσταντίνου",
+                "tax_id": "352582384",
+                "id_document": "ΑΚ 550269",
+                "address": "Οδός Ανύπαρκτης 100, Αθήνα"
+              }
+            ],
+            "legal_representatives": [],
+            "property": {
+              "type": "διαμέρισμα",
+              "address": "Οδός Ανύπαρκτης 21, Αθήνα",
+              "municipal_unit": "Ζωγράφου",
+              "floor": "4ος όροφος",
+              "area_sqm": 42.75,
+              "kaek": "997760545705/0/8",
+              "building_permit": "3853/1988 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "parental_provision",
+              "price": null,
+              "date": "2024-03-28"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ενώπιον εμού (Κωνσταντίνος Δοκιμαστής, συμβολαιογράφου με έδρα την Αθήνα)"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφου με έδρα την Αθήνα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 1.973"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Βασιλική Δοκιμαστή του Χρήστου"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 551314420"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΚ 302969"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 39, Αθήνα"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "2) Ιωάννης Παράδειγμα του Κωνσταντίνου"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 352582384"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΚ 550269"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 100, Αθήνα"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "Η γονέας είναι κυρία ενός ακινήτου (διαμέρισμα)"
+              },
+              {
+                "field": "property.address",
+                "page": 1,
+                "quote": "που βρίσκεται στη διεύθυνση Οδός Ανύπαρκτης 21, Αθήνα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 1,
+                "quote": "στη Δημοτική Ενότητα Ζωγράφου"
+              },
+              {
+                "field": "property.floor",
+                "page": 1,
+                "quote": "4ος όροφος"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "εμβαδού 42,75 τ.μ."
+              },
+              {
+                "field": "property.kaek",
+                "page": 1,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 997760545705/0/8"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 1,
+                "quote": "της υπ' αριθμ. 3853/1988 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΓΟΝΙΚΗΣ ΠΑΡΟΧΗΣ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στην Αθήνα σήμερα, 28.03.2024"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 7,
+            "text_layer": true,
+            "elapsed_seconds": 24.05,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "551314420",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "352582384",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_06.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 23.39,
+          "completeness": {
+            "scalar_pct": 84.6,
+            "list_pct": 100.0,
+            "overall_pct": 92.0,
+            "filled": 23,
+            "total": 25
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 25,
+            "total": 25,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 3,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Ευαγγελία Παράδειγμα",
+              "location": "Ηράκλειο",
+              "registry_number": "40.952"
+            },
+            "sellers": [
+              {
+                "full_name": "Γεώργιος Δοκιμαστής του Χρήστου",
+                "tax_id": "307802174",
+                "id_document": "ΑΚ 316717",
+                "address": "Οδός Ανύπαρκτης 46, Ηράκλειο"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Γεωργία Δείγμα του Κωνσταντίνου",
+                "tax_id": "859509940",
+                "id_document": "ΑΧ 439155",
+                "address": "Λεωφόρος Δοκιμών 70, Θεσσαλονίκη"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Δημήτριος Φανταστικός του Κωνσταντίνου",
+                "represents": "Γεωργία Δείγμα του Κωνσταντίνου",
+                "tax_id": "045963118",
+                "id_document": "ΑΧ 036895"
+              }
+            ],
+            "property": {
+              "type": "οικόπεδο",
+              "address": "Λεωφόρος Δοκιμών 42, Ηράκλειο",
+              "municipal_unit": "Νέας Αλικαρνασσού",
+              "floor": null,
+              "area_sqm": 885.29,
+              "kaek": "997882924155/0/7",
+              "building_permit": "4796/1995 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "parental_provision",
+              "price": null,
+              "date": "2019-10-01"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "εγώ, η συμβολαιογράφος με έδρα το Ηράκλειο, Ευαγγελία Παράδειγμα"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "η συμβολαιογράφος με έδρα το Ηράκλειο, Ευαγγελία Παράδειγμα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 40.952"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Γεώργιος Δοκιμαστής του Χρήστου"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 46, Ηράκλειο"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 307802174"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΚ 316717"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "2) Γεωργία Δείγμα του Κωνσταντίνου"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Λεωφόρος Δοκιμών 70, Θεσσαλονίκη"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 859509940"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΧ 439155"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "εκπροσωπείται από πληρεξούσιο: Δημήτριος Φανταστικός του Κωνσταντίνου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "2) Γεωργία Δείγμα του Κωνσταντίνου — κάτοικος: Λεωφόρος Δοκιμών 70, Θεσσαλονίκη · Α.Φ.Μ.: 859509940 · Δ.Α.Τ.: ΑΧ 439155 · εκπροσωπείται από πληρεξούσιο: Δημήτριος Φανταστικός"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "(Α.Φ.Μ.: 045963118"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΧ 036895)"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "Ο γονέας είναι κύριος ενός ακινήτου (οικόπεδο)"
+              },
+              {
+                "field": "property.address",
+                "page": 1,
+                "quote": "που βρίσκεται στη διεύθυνση Λεωφόρος Δοκιμών 42, Ηράκλειο"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 1,
+                "quote": "στη Δημοτική Ενότητα Νέας Αλικαρνασσού"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "επιφάνειας 885,29 m²"
+              },
+              {
+                "field": "property.kaek",
+                "page": 1,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 997882924155/0/7"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 1,
+                "quote": "υπ' αριθμ. 4796/1995 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΓΟΝΙΚΗΣ ΠΑΡΟΧΗΣ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στο Ηράκλειο σήμερα, 01.10.2019"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 6,
+            "text_layer": true,
+            "elapsed_seconds": 23.39,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "307802174",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "859509940",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "045963118",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_07.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 27.35,
+          "completeness": {
+            "scalar_pct": 100.0,
+            "list_pct": 100.0,
+            "overall_pct": 100.0,
+            "filled": 25,
+            "total": 25
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 25,
+            "total": 25,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 3,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Γεώργιος Ανύπαρκτος",
+              "location": "Πάτρα",
+              "registry_number": "15.501"
+            },
+            "sellers": [
+              {
+                "full_name": "Δήμητρα Φανταστική του Νικολάου",
+                "tax_id": "446926007",
+                "id_document": "ΑΚ 025005",
+                "address": "Οδός Ανύπαρκτης 74, Πάτρα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Μαρία Πλασματική του Παναγιώτη",
+                "tax_id": "571827753",
+                "id_document": "ΑΝ 861032",
+                "address": "Λεωφόρος Δοκιμών 78, Αθήνα"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Χρήστος Δοκιμαστής του Κωνσταντίνου",
+                "represents": "Μαρία Πλασματική του Παναγιώτη",
+                "tax_id": "913108896",
+                "id_document": "ΑΙ 097144"
+              }
+            ],
+            "property": {
+              "type": "διαμέρισμα",
+              "address": "Οδός Πλασματικής 86, Πάτρα",
+              "municipal_unit": "Δημοτική Ενότητα Πατρέων",
+              "floor": "3ος όροφος",
+              "area_sqm": 126.76,
+              "kaek": "993274885445/0/2",
+              "building_permit": "3013/1986 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 541500.0,
+              "date": "2018-10-24"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ενώπιον εμού (Γεώργιος Ανύπαρκτος, συμβολαιογράφου με έδρα την Πάτρα)"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφου με έδρα την Πάτρα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 15.501"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Δήμητρα Φανταστική του Νικολάου"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 446926007"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "υπ' αριθμ. ΑΚ 025005 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Ανύπαρκτης 74, Πάτρα"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "2) Μαρία Πλασματική του Παναγιώτη"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 571827753"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "υπ' αριθμ. ΑΝ 861032 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Λεωφόρος Δοκιμών 78, Αθήνα"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "πληρεξούσιο: Χρήστος Δοκιμαστής του Κωνσταντίνου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "2) Μαρία Πλασματική του Παναγιώτη, που γεννήθηκε το 1997, κάτοικος Λεωφόρος Δοκιμών 78, Αθήνα... που εκπροσωπείται στο παρόν από πληρεξούσιο"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 913108896"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "αριθμό δελτίου ταυτότητας ΑΙ 097144"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "κυρία ενός ακινήτου (διαμέρισμα)"
+              },
+              {
+                "field": "property.address",
+                "page": 1,
+                "quote": "βρίσκεται στη διεύθυνση Οδός Πλασματικής 86, Πάτρα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 1,
+                "quote": "στη Δημοτική Ενότητα Πατρέων"
+              },
+              {
+                "field": "property.floor",
+                "page": 1,
+                "quote": "3ος όροφος"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "εμβαδού 126,76 τετραγωνικών μέτρων (τ.μ.)"
+              },
+              {
+                "field": "property.kaek",
+                "page": 1,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 993274885445/0/2"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 1,
+                "quote": "υπ' αριθμ. 3013/1986 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 6,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 541.500 ευρώ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στην Πάτρα σήμερα, 24/10/2018"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 8,
+            "text_layer": true,
+            "elapsed_seconds": 27.35,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "446926007",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "571827753",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "913108896",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_08.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 33.74,
+          "completeness": {
+            "scalar_pct": 100.0,
+            "list_pct": 100.0,
+            "overall_pct": 100.0,
+            "filled": 37,
+            "total": 37
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 37,
+            "total": 37,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 6,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Βασιλική Εικονική",
+              "location": "Αθήνα",
+              "registry_number": "14.901"
+            },
+            "sellers": [
+              {
+                "full_name": "Γεώργιος Φανταστικός του Δημητρίου",
+                "tax_id": "395010994",
+                "id_document": "ΑΜ 776778",
+                "address": "Οδός Ανύπαρκτης 75, Αθήνα"
+              },
+              {
+                "full_name": "Μαρία Υποθετική του Γεωργίου",
+                "tax_id": "589822273",
+                "id_document": "ΑΚ 616240",
+                "address": "Λεωφόρος Δοκιμών 82, Αθήνα"
+              },
+              {
+                "full_name": "Ιωάννης Φανταστικός του Αθανασίου",
+                "tax_id": "647282075",
+                "id_document": "ΑΒ 513425",
+                "address": "Οδός Ανύπαρκτης 44, Αθήνα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Χρήστος Εικονικός του Κωνσταντίνου",
+                "tax_id": "843643270",
+                "id_document": "ΑΗ 752303",
+                "address": "Οδός Φανταστικής 7, Πειραιάς"
+              },
+              {
+                "full_name": "Μαρία Φανταστική του Χρήστου",
+                "tax_id": "465605585",
+                "id_document": "ΑΧ 793105",
+                "address": "Οδός Πλασματικής 120, Πειραιάς"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Σοφία Δοκιμαστή του Χρήστου",
+                "represents": "Γεώργιος Φανταστικός του Δημητρίου",
+                "tax_id": "856805740",
+                "id_document": "ΑΗ 401533"
+              }
+            ],
+            "property": {
+              "type": "κατάστημα",
+              "address": "Οδός Ανύπαρκτης 50, Αθήνα",
+              "municipal_unit": "Αμπελοκήπων",
+              "floor": "ισόγειο",
+              "area_sqm": 104.75,
+              "kaek": "995787793269/0/2",
+              "building_permit": "9768/1997 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 273000.0,
+              "date": "2017-12-19"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "εγώ, η συμβολαιογράφος με έδρα την Αθήνα, Βασιλική Εικονική"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "η συμβολαιογράφος με έδρα την Αθήνα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 14.901"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Γεώργιος Φανταστικός του Δημητρίου"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 75, Αθήνα"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 395010994"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΜ 776778"
+              },
+              {
+                "field": "sellers[1].full_name",
+                "page": 1,
+                "quote": "2) Μαρία Υποθετική του Γεωργίου"
+              },
+              {
+                "field": "sellers[1].address",
+                "page": 1,
+                "quote": "κάτοικος: Λεωφόρος Δοκιμών 82, Αθήνα"
+              },
+              {
+                "field": "sellers[1].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 589822273"
+              },
+              {
+                "field": "sellers[1].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΚ 616240"
+              },
+              {
+                "field": "sellers[2].full_name",
+                "page": 1,
+                "quote": "3) Ιωάννης Φανταστικός του Αθανασίου"
+              },
+              {
+                "field": "sellers[2].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Ανύπαρκτης 44, Αθήνα"
+              },
+              {
+                "field": "sellers[2].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 647282075"
+              },
+              {
+                "field": "sellers[2].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΒ 513425"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "4) Χρήστος Εικονικός του Κωνσταντίνου"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Φανταστικής 7, Πειραιάς"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 843643270"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΗ 752303"
+              },
+              {
+                "field": "buyers[1].full_name",
+                "page": 1,
+                "quote": "5) Μαρία Φανταστική του Χρήστου"
+              },
+              {
+                "field": "buyers[1].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Πλασματικής 120, Πειραιάς"
+              },
+              {
+                "field": "buyers[1].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 465605585"
+              },
+              {
+                "field": "buyers[1].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΧ 793105"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "εκπροσωπείται από πληρεξούσιο: Σοφία Δοκιμαστή του Χρήστου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "1) Γεώργιος Φανταστικός του Δημητρίου — κάτοικος: Οδός Ανύπαρκτης 75, Αθήνα · Α.Φ.Μ.: 395010994 · Δ.Α.Τ.: ΑΜ 776778 · εκπροσωπείται από πληρεξούσιο: Σοφία Δοκιμαστή του Χρήστου"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 856805740"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΗ 401533"
+              },
+              {
+                "field": "property.type",
+                "page": 2,
+                "quote": "Οι πωλητές είναι συγκύριοι ενός ακινήτου (κατάστημα)"
+              },
+              {
+                "field": "property.address",
+                "page": 2,
+                "quote": "που βρίσκεται στη διεύθυνση Οδός Ανύπαρκτης 50, Αθήνα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 2,
+                "quote": "στη Δημοτική Ενότητα Αμπελοκήπων"
+              },
+              {
+                "field": "property.floor",
+                "page": 2,
+                "quote": "ενός ακινήτου (κατάστημα), ισόγειο"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 2,
+                "quote": "επιφάνειας 104,75 m²"
+              },
+              {
+                "field": "property.kaek",
+                "page": 2,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 995787793269/0/2"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 2,
+                "quote": "δυνάμει της υπ' αριθμ. 9768/1997 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 2,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 273.000,00 €"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στην Αθήνα σήμερα, 19.12.2017"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 7,
+            "text_layer": true,
+            "elapsed_seconds": 33.74,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "395010994",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[1].tax_id",
+              "value": "589822273",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[2].tax_id",
+              "value": "647282075",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "843643270",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[1].tax_id",
+              "value": "465605585",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "856805740",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_09.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 25.53,
+          "completeness": {
+            "scalar_pct": 92.3,
+            "list_pct": 100.0,
+            "overall_pct": 96.6,
+            "filled": 28,
+            "total": 29
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 29,
+            "total": 29,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 4,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Παναγιώτης Παράδειγμα",
+              "location": "Πάτρα",
+              "registry_number": "23.088"
+            },
+            "sellers": [
+              {
+                "full_name": "Αικατερίνη Δοκιμαστή του Ιωάννη",
+                "tax_id": "442146785",
+                "id_document": "ΑΚ 510643",
+                "address": "Λεωφόρος Δοκιμών 109, Πάτρα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Παναγιώτης Πλασματικός του Κωνσταντίνου",
+                "tax_id": "650698101",
+                "id_document": "ΑΙ 040323",
+                "address": "Οδός Πλασματικής 34, Ηράκλειο"
+              },
+              {
+                "full_name": "Ιωάννης Ανύπαρκτος του Γεωργίου",
+                "tax_id": "360264943",
+                "id_document": "ΑΝ 926231",
+                "address": "Οδός Ανύπαρκτης 3, Ηράκλειο"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Δημήτριος Εικονικός του Νικολάου",
+                "represents": "Αικατερίνη Δοκιμαστή του Ιωάννη",
+                "tax_id": "032110287",
+                "id_document": "ΑΧ 352305"
+              }
+            ],
+            "property": {
+              "type": "οικόπεδο",
+              "address": "Λεωφόρος Δοκιμών 40, Πάτρα",
+              "municipal_unit": "Ρίου",
+              "floor": null,
+              "area_sqm": 932.4,
+              "kaek": "992554726925/0/0",
+              "building_permit": "711/1985 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 63500.0,
+              "date": "2016-04-16"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "εγώ, ο συμβολαιογράφος με έδρα την Πάτρα, Παναγιώτης Παράδειγμα"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφος με έδρα την Πάτρα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 23.088"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Αικατερίνη Δοκιμαστή του Ιωάννη"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Λεωφόρος Δοκιμών 109, Πάτρα"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΚ 510643 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 442146785"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "εκπροσωπείται στο παρόν από πληρεξούσιο: Δημήτριος Εικονικός του Νικολάου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "1) Αικατερίνη Δοκιμαστή του Ιωάννη, που γεννήθηκε το 1984, κάτοικος Λεωφόρος Δοκιμών 109, Πάτρα... που εκπροσωπείται στο παρόν από πληρεξούσιο: Δημήτριος Εικονικός του Νικολάου"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 032110287"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "αριθμό δελτίου ταυτότητας ΑΧ 352305"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "2) Παναγιώτης Πλασματικός του Κωνσταντίνου"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Πλασματικής 34, Ηράκλειο"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΙ 040323 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 650698101"
+              },
+              {
+                "field": "buyers[1].full_name",
+                "page": 1,
+                "quote": "3) Ιωάννης Ανύπαρκτος του Γεωργίου"
+              },
+              {
+                "field": "buyers[1].address",
+                "page": 1,
+                "quote": "κάτοικος Οδός Ανύπαρκτης 3, Ηράκλειο"
+              },
+              {
+                "field": "buyers[1].id_document",
+                "page": 1,
+                "quote": "κάτοχος του υπ' αριθμ. ΑΝ 926231 δελτίου αστυνομικής ταυτότητας"
+              },
+              {
+                "field": "buyers[1].tax_id",
+                "page": 1,
+                "quote": "με Α.Φ.Μ. 360264943"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "Η πωλήτρια είναι κυρία ενός ακινήτου (οικόπεδο)"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 2,
+                "quote": "εμβαδού 932,40 τ.μ."
+              },
+              {
+                "field": "property.address",
+                "page": 2,
+                "quote": "που βρίσκεται στη διεύθυνση Λεωφόρος Δοκιμών 40, Πάτρα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 2,
+                "quote": "στη Δημοτική Ενότητα Ρίου"
+              },
+              {
+                "field": "property.kaek",
+                "page": 2,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 992554726925/0/0"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 2,
+                "quote": "δυνάμει της υπ' αριθμ. 711/1985 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 5,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 63.500,00 €"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "Στην Πάτρα σήμερα, 16/4/2016"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 5,
+            "text_layer": true,
+            "elapsed_seconds": 25.53,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "442146785",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "650698101",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[1].tax_id",
+              "value": "360264943",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "032110287",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "pdf": "deed_10.pdf",
+      "models": [
+        {
+          "model": "gemini-3.8-flash",
+          "elapsed_s": 22.97,
+          "completeness": {
+            "scalar_pct": 92.3,
+            "list_pct": 100.0,
+            "overall_pct": 97.0,
+            "filled": 32,
+            "total": 33
+          },
+          "accuracy": {
+            "accuracy_pct": 100.0,
+            "correct": 33,
+            "total": 33,
+            "extra_parties": 0,
+            "mismatches": []
+          },
+          "checks_failed": 5,
+          "error": null
+        }
+      ],
+      "raw_results": {
+        "gemini-3.8-flash": {
+          "deed": {
+            "notary": {
+              "name": "Νικόλαος Παράδειγμα",
+              "location": "Αθήνα",
+              "registry_number": "12.030"
+            },
+            "sellers": [
+              {
+                "full_name": "Αικατερίνη Φανταστική του Δημητρίου",
+                "tax_id": "962337998",
+                "id_document": "ΑΕ 203513",
+                "address": "Λεωφόρος Δοκιμών 22, Αθήνα"
+              },
+              {
+                "full_name": "Μαρία Δοκιμαστή του Γεωργίου",
+                "tax_id": "305120117",
+                "id_document": "ΑΤ 188302",
+                "address": "Οδός Πλασματικής 55, Αθήνα"
+              },
+              {
+                "full_name": "Δήμητρα Ανύπαρκτη του Νικολάου",
+                "tax_id": "838875650",
+                "id_document": "ΑΧ 145642",
+                "address": "Οδός Υποθέσεων 119, Αθήνα"
+              }
+            ],
+            "buyers": [
+              {
+                "full_name": "Ευαγγελία Δοκιμαστή του Ιωάννη",
+                "tax_id": "379683882",
+                "id_document": "ΑΙ 139812",
+                "address": "Οδός Φανταστικής 71, Πειραιάς"
+              }
+            ],
+            "legal_representatives": [
+              {
+                "full_name": "Βασιλική Ανύπαρκτη του Χρήστου",
+                "represents": "Ευαγγελία Δοκιμαστή του Ιωάννη",
+                "tax_id": "995260499",
+                "id_document": "ΑΒ 957071"
+              }
+            ],
+            "property": {
+              "type": "μονοκατοικία",
+              "address": "Λεωφόρος Δοκιμών 106, Αθήνα",
+              "municipal_unit": "Ζωγράφου",
+              "floor": null,
+              "area_sqm": 177.22,
+              "kaek": "998618276547/0/6",
+              "building_permit": "9038/1986 του Πολεοδομικού Γραφείου Δοκιμών"
+            },
+            "transaction": {
+              "deed_type": "sale",
+              "price": 204000.0,
+              "date": "2024-07-18"
+            },
+            "sources": [
+              {
+                "field": "notary.name",
+                "page": 1,
+                "quote": "ενώπιον εμού (Νικόλαος Παράδειγμα, συμβολαιογράφου με έδρα την Αθήνα)"
+              },
+              {
+                "field": "notary.location",
+                "page": 1,
+                "quote": "συμβολαιογράφου με έδρα την Αθήνα"
+              },
+              {
+                "field": "notary.registry_number",
+                "page": 1,
+                "quote": "Αριθμός 12.030"
+              },
+              {
+                "field": "sellers[0].full_name",
+                "page": 1,
+                "quote": "1) Αικατερίνη Φανταστική του Δημητρίου"
+              },
+              {
+                "field": "sellers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 962337998"
+              },
+              {
+                "field": "sellers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΕ 203513"
+              },
+              {
+                "field": "sellers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Λεωφόρος Δοκιμών 22, Αθήνα"
+              },
+              {
+                "field": "sellers[1].full_name",
+                "page": 1,
+                "quote": "2) Μαρία Δοκιμαστή του Γεωργίου"
+              },
+              {
+                "field": "sellers[1].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 305120117"
+              },
+              {
+                "field": "sellers[1].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΤ 188302"
+              },
+              {
+                "field": "sellers[1].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Πλασματικής 55, Αθήνα"
+              },
+              {
+                "field": "sellers[2].full_name",
+                "page": 1,
+                "quote": "3) Δήμητρα Ανύπαρκτη του Νικολάου"
+              },
+              {
+                "field": "sellers[2].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 838875650"
+              },
+              {
+                "field": "sellers[2].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΧ 145642"
+              },
+              {
+                "field": "sellers[2].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Υποθέσεων 119, Αθήνα"
+              },
+              {
+                "field": "buyers[0].full_name",
+                "page": 1,
+                "quote": "4) Ευαγγελία Δοκιμαστή του Ιωάννη"
+              },
+              {
+                "field": "buyers[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 379683882"
+              },
+              {
+                "field": "buyers[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΙ 139812"
+              },
+              {
+                "field": "buyers[0].address",
+                "page": 1,
+                "quote": "κάτοικος: Οδός Φανταστικής 71, Πειραιάς"
+              },
+              {
+                "field": "legal_representatives[0].full_name",
+                "page": 1,
+                "quote": "Βασιλική Ανύπαρκτη του Χρήστου"
+              },
+              {
+                "field": "legal_representatives[0].represents",
+                "page": 1,
+                "quote": "4) Ευαγγελία Δοκιμαστή του Ιωάννη — κάτοικος: Οδός Φανταστικής 71, Πειραιάς · Α.Φ.Μ.: 379683882 · Δ.Α.Τ.: ΑΙ 139812 · εκπροσωπείται από πληρεξούσιο: Βασιλική Ανύπαρκτη του Χρήστου"
+              },
+              {
+                "field": "legal_representatives[0].tax_id",
+                "page": 1,
+                "quote": "Α.Φ.Μ.: 995260499"
+              },
+              {
+                "field": "legal_representatives[0].id_document",
+                "page": 1,
+                "quote": "Δ.Α.Τ.: ΑΒ 957071"
+              },
+              {
+                "field": "property.type",
+                "page": 1,
+                "quote": "ακινήτου (μονοκατοικία)"
+              },
+              {
+                "field": "property.address",
+                "page": 2,
+                "quote": "Λεωφόρος Δοκιμών 106, Αθήνα"
+              },
+              {
+                "field": "property.municipal_unit",
+                "page": 2,
+                "quote": "στη Δημοτική Ενότητα Ζωγράφου"
+              },
+              {
+                "field": "property.area_sqm",
+                "page": 1,
+                "quote": "επιφάνειας 177,22 m²"
+              },
+              {
+                "field": "property.kaek",
+                "page": 2,
+                "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 998618276547/0/6"
+              },
+              {
+                "field": "property.building_permit",
+                "page": 2,
+                "quote": "υπ' αριθμ. 9038/1986 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+              },
+              {
+                "field": "transaction.deed_type",
+                "page": 1,
+                "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+              },
+              {
+                "field": "transaction.price",
+                "page": 2,
+                "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 204.000 ευρώ"
+              },
+              {
+                "field": "transaction.date",
+                "page": 1,
+                "quote": "την 18η Ιουλίου του έτους 2024"
+              }
+            ]
+          },
+          "meta": {
+            "model": "gemini-3.8-flash",
+            "provider": "gemini",
+            "pages": 6,
+            "text_layer": true,
+            "elapsed_seconds": 22.97,
+            "history_id": null,
+            "note": null
+          },
+          "validation": [
+            {
+              "field": "sellers[0].tax_id",
+              "value": "962337998",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[1].tax_id",
+              "value": "305120117",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "sellers[2].tax_id",
+              "value": "838875650",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "buyers[0].tax_id",
+              "value": "379683882",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            },
+            {
+              "field": "legal_representatives[0].tax_id",
+              "value": "995260499",
+              "message": "ΑΦΜ fails the official check-digit test.",
+              "severity": "error"
+            }
+          ],
+          "error": null
+        }
+      }
+    }
+  ]
+}

@@ -16,7 +16,7 @@ The pipeline converts a PDF into page images (plus the PDF's own text, when it h
 - **Batch and background jobs**: up to 20 deeds at once, processed in the background with a live progress table, and exported together as one spreadsheet.
 - **History**: every result is saved with the user's corrections and review ticks — the extracted values only, never the PDF.
 - **Demo without a key**: three fictional deeds open on real answers Gemini gave in a benchmark run, so anyone can look around before getting an API key.
-- **Measured accuracy**: a labelled set of fictional deeds gives field-level accuracy, not just a count of filled-in fields.
+- **Measured accuracy**: labelled sets of fictional deeds give field-level accuracy, not just a count of filled-in fields: 100% on long, varied and held-out digital deeds, 99.3% on harsh scans (see [Results](#results)).
 - **Model comparison**: Gemini Flash and Flash-Lite run side by side on the same document, scored on accuracy, completeness and latency. Both are on the free tier; Pro can be added on a paid key.
 - **Source for every value**: the model cites the page and exact text each value came from; one click shows that page in the preview.
 - **Review and export**: correct any value in place (checks re-run automatically), then download Excel or CSV.
@@ -28,6 +28,39 @@ The pipeline converts a PDF into page images (plus the PDF's own text, when it h
 | Source quotes | Editing | Batch |
 |---|---|---|
 | ![Sources tab with page links and quotes](docs/screenshots/sources.png) | ![Edit mode with input fields](docs/screenshots/editing.png) | ![Batch tab with a progress table](docs/screenshots/batch.png) |
+
+---
+
+## Results
+
+Field-level accuracy of `gemini-3.8-flash` on **synthetic** deeds (fictional, generated with known correct values; see [Evaluation methodology](#evaluation-methodology)). Every field is compared, including those that should be empty, so an invented value counts as wrong. Final prompt, one run per set, 10 deeds each:
+
+| Set | Accuracy | Perfect deeds | Median time |
+|---|---|---|---|
+| Long deeds full of look-alike values (digital) | **100%** | 10/10 | 29 s |
+| Varied wording and layout (digital) | **100%** | 10/10 | 27 s |
+| Held-out: new deeds, permit worded and issued differently | **100%** | 10/10 | 29 s |
+| Varied, harsh scans (stamps, signatures, no text layer) | **99.3%** | 9/10 | 26 s |
+
+Raw outputs and scores are in [`docs/results/`](docs/results/).
+
+### How it got there
+
+Each step was measured, fixed, and measured again:
+
+| Step | Before | After |
+|---|---|---|
+| **Lawyers listed as representatives.** In the 4 long deeds with no real representative, Flash listed the lawyers attending the signing. One sentence in the schema and prompt | 92.3%, 5 invented people | 98.6%, none; real representatives still 5/5 |
+| **Misread ΚΑΕΚ digits** (one pair swapped, one digit dropped) that still looked valid. The PDF's text now goes with each page image, and every copied value is looked up in it | 98.8% on the same 8 deeds, 2 misreads, ~39 s | 99.6%, 0 misreads, ~27 s |
+| **Building permit without its issuing office** («1728/1990»): all 3 errors on the varied deeds, 6 of 7 on their scans. The field now asks for the issuing authority | varied 98.8%, scans 97.5% | varied 100%, scans 99.3% |
+
+The permit fix was found on the varied deeds, so it was also measured on a **held-out set** of ten new deeds whose permit is worded three new ways and issued by three different offices: 100%, every issuing office copied correctly.
+
+### What is left
+
+- **Scans have no text to check against.** The two remaining errors are both on one harsh scan: a ΚΑΕΚ that lost a digit (flagged by the format check) and a representative's ΑΦΜ with one digit misread (0 → 8). On a real deed the ΑΦΜ check digit would usually flag it; the fictional tax IDs fail that test on purpose, so here it cannot be told apart.
+- **Flash-Lite**, measured earlier with the first prompt: 95.0% on short deeds, 95.7% on their scans and 79.5% on long ones, with systematic errors (cities dropped from addresses, rare surnames "corrected", representatives invented in every long deed). About 2–3× faster, but not accurate enough to use without review.
+- **Limits of these numbers**: the deeds come from one generator, ten per set, one run each. Results vary between runs (the ΚΑΕΚ misreads appeared in one run and not another), so a difference of a point or two is not meaningful. Real deeds vary more, so expect lower accuracy on them.
 
 ---
 
