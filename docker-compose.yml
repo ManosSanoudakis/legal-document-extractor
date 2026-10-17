@@ -1,6 +1,9 @@
 services:
   api:
     build: .
+    environment:
+      # Optional comma-separated model list; empty uses the defaults in extractor.py
+      - GEMINI_MODELS=${GEMINI_MODELS:-}
     restart: unless-stopped
 
   web:

@@ -6,8 +6,13 @@ a model that invents a value where the deed has none is marked wrong. This is
 what separates accuracy from completeness, which rewards any non-null value.
 
 Comparison is tolerant of formatting only: accents, case, spacing and
-punctuation are ignored, ID numbers may use Latin look-alike letters, and a
-name with or without the patronymic counts as the same name.
+punctuation are ignored, ID numbers may use Latin look-alike letters, a
+name with or without the patronymic counts as the same name, and a municipal
+unit with or without the "Δημοτική Ενότητα" label counts as the same unit.
+Other text must match in full: an address without its city is wrong.
+
+An invented party (say, a lawyer listed as a legal representative) counts
+as wrong in every one of its fields, just as a missed party does.
 """
 from __future__ import annotations
 
@@ -17,12 +22,12 @@ from datetime import date
 from validators import digits, norm_text
 
 SCALAR_FIELDS: dict[str, str] = {
-    "notary.name": "text",
-    "notary.location": "text",
+    "notary.name": "name",
+    "notary.location": "name",  # "Πειραιάς" or "Πειραιά" as written in "στον Πειραιά"
     "notary.registry_number": "digits",
     "property.type": "text",
     "property.address": "text",
-    "property.municipal_unit": "text",
+    "property.municipal_unit": "unit",
     "property.floor": "floor",
     "property.area_sqm": "number",
     "property.kaek": "digits",
@@ -32,8 +37,11 @@ SCALAR_FIELDS: dict[str, str] = {
     "transaction.date": "date",
 }
 
-PARTY_FIELDS = {"full_name": "text", "tax_id": "digits", "id_document": "id", "address": "text"}
-REP_FIELDS = {"full_name": "text", "represents": "text", "tax_id": "digits", "id_document": "id"}
+PARTY_FIELDS = {"full_name": "name", "tax_id": "digits", "id_document": "id", "address": "text"}
+REP_FIELDS = {"full_name": "name", "represents": "name", "tax_id": "digits", "id_document": "id"}
+
+# "Δημοτική Ενότητα Ζωγράφου" and "Ζωγράφου" name the same unit
+_UNIT_LABEL = re.compile(r"^(δημοτικη ενοτητα|δ ε) ")
 
 # Greek capitals that look identical to Latin ones (ID numbers are often typed either way)
 _LOOKALIKES = str.maketrans("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", "ABEZHIKMNOPTYX")
@@ -92,8 +100,12 @@ def values_match(kind: str, expected: object, got: object) -> bool:
         # fall through to text comparison for e.g. "ισόγειο"
 
     a, b = norm_text(expected), norm_text(got)
+    if kind == "unit":
+        a, b = _UNIT_LABEL.sub("", a), _UNIT_LABEL.sub("", b)
     if a == b:
         return True
+    if kind != "name":
+        return False
     shorter, longer = sorted((a, b), key=len)
     # "Γεώργιος Υποθετικός" vs "Γεώργιος Υποθετικός του Νικολάου"
     return len(shorter) >= 4 and longer.startswith(shorter)
@@ -114,7 +126,7 @@ def _match_parties(expected: list[dict], got: list[dict]) -> list[tuple[dict, di
             (g for g in remaining if exp.get("tax_id") and values_match("digits", exp["tax_id"], g.get("tax_id"))),
             None,
         ) or next(
-            (g for g in remaining if values_match("text", exp.get("full_name"), g.get("full_name"))),
+            (g for g in remaining if values_match("name", exp.get("full_name"), g.get("full_name"))),
             None,
         )
         if match is not None:
@@ -147,7 +159,13 @@ def score_accuracy(predicted: dict, truth: dict) -> dict:
         for i, (exp, got) in enumerate(pairs):
             for key, kind in fields.items():
                 record(f"{role}[{i}].{key}", kind, exp.get(key), (got or {}).get(key))
-        extra += max(0, len(got_list) - sum(1 for _, g in pairs if g is not None))
+        matched = [g for _, g in pairs if g is not None]
+        invented = [g for g in got_list if not any(g is m for m in matched)]
+        for i, got in enumerate(invented, start=len(pairs)):
+            for key in fields:
+                total += 1
+                mismatches.append({"field": f"{role}[{i}].{key}", "expected": None, "got": got.get(key)})
+        extra += len(invented)
 
     return {
         "accuracy_pct": round(correct / total * 100, 1) if total else 0.0,
