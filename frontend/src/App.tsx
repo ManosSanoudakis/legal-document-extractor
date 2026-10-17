@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ApiError, evaluate, extract, getConfig } from "./api";
+import { ApiError, evaluate, extract, getConfig, recheck } from "./api";
 import { DocumentCard } from "./components/DocumentCard";
 import { EvaluationView } from "./components/EvaluationView";
 import { ResultsView } from "./components/ResultsView";
@@ -143,7 +143,17 @@ export default function App() {
                     missing={missing}
                     task={extraction.task}
                     onRun={() => doc && extraction.run(() => extract(doc, model, apiKey.trim()))}
-                    render={(data) => <ResultsView result={data} onShowPage={showPage} />}
+                    render={(data) => (
+                      <ResultsView
+                        result={data}
+                        onShowPage={showPage}
+                        onRecheck={
+                          doc && apiKey.trim()
+                            ? (deed, fields) => recheck(doc, data._meta?.model ?? model, apiKey.trim(), deed, fields)
+                            : undefined
+                        }
+                      />
+                    )}
                   />
                 ) : (
                   <RunPanel

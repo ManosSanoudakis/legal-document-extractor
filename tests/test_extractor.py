@@ -115,3 +115,39 @@ def test_scanned_pages_have_no_text_layer(tmp_path):
     samples = Path(__file__).resolve().parent.parent / "samples"
     assert all(extractor.pdf_page_texts(str(samples / "sample_deed.pdf")))
     assert not any(extractor.pdf_page_texts(str(samples / "dataset_scanned" / "deed_01.pdf")))
+
+
+def test_recheck_reads_flagged_fields_again(monkeypatch, sample_truth):
+    """The second reading sees only the cited pages, never the suspect value, and is compared with it."""
+    from pathlib import Path
+
+    from schema import Recheck
+
+    sample = str(Path(__file__).resolve().parent.parent / "samples" / "sample_deed.pdf")
+    deed = {**sample_truth, "sources": [{"field": "property.kaek", "page": 1, "quote": "..."}]}
+    deed["property"] = {**deed["property"], "kaek": "999910000012/0/5"}  # first reading swapped two digits
+    answers = Recheck.model_validate({"answers": [
+        {"field": "property.kaek", "value": "999901000012/0/5", "page": 1, "quote": "ΚΑΕΚ 999901000012/0/5"},
+        {"field": "sellers[1].tax_id", "value": "987654320", "page": 1, "quote": "Α.Φ.Μ. 987654320"},
+        {"field": "notary.name", "value": "not asked for", "page": 1, "quote": ""},
+    ]})
+    client = FakeClient(SimpleNamespace(parsed=answers, text=None))
+    monkeypatch.setattr(extractor.genai, "Client", lambda api_key, **kwargs: client)
+
+    result = extractor.run_recheck(sample, "key", deed, ["property.kaek", "sellers[1].tax_id"], "gemini-test")
+
+    prompt = client.calls[0]["contents"][-1]
+    assert "property.kaek" in prompt and "Πωλητής 2 (Μαρία Υποθετική του Ιωάννη)" in prompt
+    assert "999910000012" not in prompt  # the suspect value is not shown
+    assert result["_meta"]["pages"] == [1]
+    by_field = {a["field"]: a for a in result["answers"]}
+    assert set(by_field) == {"property.kaek", "sellers[1].tax_id"}  # unasked fields are dropped
+    assert by_field["property.kaek"]["agrees"] is False and by_field["property.kaek"]["found_in_text"] is True
+    assert by_field["sellers[1].tax_id"]["agrees"] is True
+
+
+def test_recheck_rejects_unknown_fields(sample_truth):
+    with pytest.raises(ValueError):
+        extractor.run_recheck("unused.pdf", "key", sample_truth, ["property.colour"])
+    with pytest.raises(ValueError):
+        extractor.run_recheck("unused.pdf", "key", sample_truth, ["sellers.tax_id"])  # a party needs an index

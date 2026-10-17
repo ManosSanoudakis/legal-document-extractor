@@ -14,8 +14,8 @@ from google.genai import types
 from PIL import Image
 from pydantic import ValidationError
 
-from schema import Deed, empty_deed
-from validators import validate_deed
+from schema import Deed, Recheck, empty_deed, field_description
+from validators import PATH_PATTERN, get_path, in_text, validate_deed, values_agree
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,19 @@ PROMPT = """
   ακριβές απόσπασμα του εγγράφου όπου εμφανίζεται η τιμή.
 """
 
+RECHECK_PROMPT = """
+Διάβασε ξανά, ανεξάρτητα, μόνο τα παρακάτω πεδία ενός ελληνικού
+συμβολαιογραφικού εγγράφου. Οι σελίδες δίνονται σε υψηλή ανάλυση: διάβασε
+κάθε τιμή χαρακτήρα προς χαρακτήρα.
+
+Πεδία:
+{fields}
+
+Για κάθε πεδίο επίστρεψε την τιμή ακριβώς όπως γράφεται (null αν δεν
+υπάρχει), τη σελίδα και το απόσπασμα όπου εμφανίζεται. Γράψε ό,τι βλέπεις,
+χωρίς διορθώσεις.
+"""
+
 # ---------------------------------------------------------------------------
 # PDF → images
 # ---------------------------------------------------------------------------
@@ -76,8 +89,9 @@ def pdf_to_images(
     pdf_path: str,
     output_dir: str,
     dpi: int = 150,
+    pages: list[int] | None = None,
 ) -> list[Path]:
-    """Rasterise every PDF page to JPEG in output_dir."""
+    """Rasterise PDF pages (all, or the given 1-based page numbers) to JPEG in output_dir."""
     path = Path(pdf_path)
     if not path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
@@ -88,6 +102,8 @@ def pdf_to_images(
     paths: list[Path] = []
     with fitz.open(str(path)) as doc:
         for i, page in enumerate(doc, start=1):
+            if pages is not None and i not in pages:
+                continue
             dest = out / f"{i}.jpeg"
             page.get_pixmap(dpi=dpi).save(str(dest))
             paths.append(dest)
@@ -123,6 +139,10 @@ class BaseExtractor(ABC):
 
     @abstractmethod
     def extract(self, image_paths: list[Path], page_texts: list[str] | None = None) -> dict: ...
+
+    @abstractmethod
+    def recheck(self, pages: list[tuple[int, Path, str]], fields: str) -> list[dict]:
+        """Read the described fields again from (page number, image, text) triples."""
 
     @staticmethod
     def _parse_response(text: str | None) -> dict:
@@ -202,6 +222,36 @@ class GeminiExtractor(BaseExtractor):
         data["_meta"] = self._meta(elapsed, len(images), text_layer=full_text is not None)
         return data
 
+    def recheck(self, pages: list[tuple[int, Path, str]], fields: str) -> list[dict]:
+        client = genai.Client(api_key=self.api_key, http_options=HTTP_OPTIONS)
+        images = [Image.open(p) for _, p, _ in pages]
+        contents: list = []
+        for (number, _, text), img in zip(pages, images, strict=True):
+            contents += [f"Σελίδα {number}:", img]
+            if text:
+                contents.append(f"Κείμενο σελίδας {number} (από το PDF):\n{text}")
+        contents.append(RECHECK_PROMPT.format(fields=fields))
+        try:
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    max_output_tokens=MAX_OUTPUT_TOKENS,
+                    response_mime_type="application/json",
+                    response_schema=Recheck,
+                ),
+            )
+        finally:
+            for img in images:
+                img.close()
+        if isinstance(response.parsed, Recheck):
+            return [a.model_dump() for a in response.parsed.answers]
+        try:
+            return [a.model_dump() for a in Recheck.model_validate_json(response.text or "").answers]
+        except ValidationError:
+            logger.warning("Re-check response did not match the schema")
+            return []
+
     def _structured(self, response: types.GenerateContentResponse) -> dict:
         """Schema-validated output, falling back to plain JSON parsing."""
         if isinstance(response.parsed, Deed):
@@ -237,6 +287,78 @@ def run_pipeline(
     with tempfile.TemporaryDirectory() as pages_dir:
         image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
         return _get_extractor(model_name, api_key).extract(image_paths, pdf_page_texts(pdf_path))
+
+MAX_RECHECK_FIELDS = 30
+ROLE_LABELS = {"sellers": "Πωλητής", "buyers": "Αγοραστής", "legal_representatives": "Εκπρόσωπος"}
+
+
+def describe_field(deed: dict, path: str) -> str | None:
+    """One line telling the model which field to read; None if the path is not a known field.
+
+    A party's field names the person ("Πωλητής 2 (Μαρία ...)"), so the model
+    reads the tax ID of the right one.
+    """
+    m = PATH_PATTERN.match(path)
+    if not m:
+        return None
+    section, index, key = m.groups()
+    description = field_description(section, key)
+    if description is None or (index is None) != (section not in ROLE_LABELS):
+        return None
+    if index is None:
+        return f"- {path}: {description}"
+    name = get_path(deed, f"{section}[{index}].full_name")
+    who = f"{ROLE_LABELS[section]} {int(index) + 1}" + (f" ({name})" if name and key != "full_name" else "")
+    return f"- {path} [{who}]: {description}"
+
+
+def run_recheck(
+    pdf_path: str,
+    api_key: str,
+    deed: dict,
+    fields: list[str],
+    model_name: str = MODELS[0],
+) -> dict:
+    """A second, independent reading of a few fields, at higher resolution.
+
+    Only the pages the first reading cited are sent (all pages if it cited
+    none). The current values are not shown to the model, so the second
+    reading cannot simply repeat them. Each answer says whether it agrees with
+    the current value and, for a digital PDF, whether it appears in the text.
+    """
+    lines = {f: describe_field(deed, f) for f in dict.fromkeys(fields)}
+    unknown = [f for f, line in lines.items() if line is None]
+    if unknown or not lines or len(lines) > MAX_RECHECK_FIELDS:
+        raise ValueError(f"Cannot re-check these fields: {unknown or list(lines)}")
+
+    texts = pdf_page_texts(pdf_path)
+    cited = {
+        s.get("page") for s in deed.get("sources") or []
+        if s.get("field") in lines and isinstance(s.get("page"), int) and 1 <= s["page"] <= len(texts)
+    }
+    pages = sorted(cited) or list(range(1, len(texts) + 1))
+    t0 = time.perf_counter()
+    with tempfile.TemporaryDirectory() as pages_dir:
+        images = pdf_to_images(pdf_path, pages_dir, dpi=300 if len(pages) <= 4 else 200, pages=pages)
+        triples = [(n, img, texts[n - 1]) for n, img in zip(pages, images, strict=True)]
+        answers = _get_extractor(model_name, api_key).recheck(triples, "\n".join(lines.values()))
+
+    full_text = " ".join(texts) if all(texts) else None
+    results = []
+    for a in answers:
+        if a.get("field") not in lines:
+            continue
+        key = a["field"].rsplit(".", 1)[-1]
+        value = a.get("value")
+        results.append({
+            **a,
+            "agrees": values_agree(key, value, get_path(deed, a["field"])),
+            "found_in_text": None if full_text is None or value is None else in_text(key, value, full_text),
+        })
+    return {
+        "answers": results,
+        "_meta": {"model": model_name, "pages": pages, "elapsed_seconds": round(time.perf_counter() - t0, 2)},
+    }
 
 # ---------------------------------------------------------------------------
 # CLI

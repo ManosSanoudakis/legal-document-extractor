@@ -22,7 +22,7 @@ from google.genai import errors as genai_errors
 
 from evaluate import run_evaluation
 from export import to_csv, to_xlsx
-from extractor import GeminiExtractor, run_pipeline
+from extractor import MAX_RECHECK_FIELDS, GeminiExtractor, run_pipeline, run_recheck
 from validators import validate_deed
 
 logging.basicConfig(
@@ -179,6 +179,40 @@ def evaluate(
     if all_failed and all("API key" in e or "API_KEY_INVALID" in e for e in errors):
         raise HTTPException(401, "Gemini rejected the API key.")
     return report
+
+
+@app.post("/api/recheck")
+def recheck(
+    x_gemini_key: Annotated[str | None, Header()] = None,
+    model: Annotated[str, Form()] = GeminiExtractor.MODELS[0],
+    deed: Annotated[str, Form()] = "{}",
+    fields: Annotated[str, Form()] = "[]",
+    use_sample: Annotated[bool, Form()] = False,
+    file: Annotated[UploadFile | None, File()] = None,
+) -> dict:
+    """Read a few flagged fields again at higher resolution: one model call."""
+    api_key = require_api_key(x_gemini_key)
+    if model not in GeminiExtractor.MODELS:
+        raise HTTPException(400, f"Unknown model '{model}'.")
+    try:
+        current, wanted = json.loads(deed), json.loads(fields)
+    except json.JSONDecodeError:
+        raise HTTPException(422, "deed and fields must be JSON.") from None
+    if not isinstance(current, dict) or not isinstance(wanted, list) or not all(isinstance(f, str) for f in wanted):
+        raise HTTPException(422, "deed must be an object and fields a list of field paths.")
+    if not 1 <= len(wanted) <= MAX_RECHECK_FIELDS:
+        raise HTTPException(422, f"Re-check between 1 and {MAX_RECHECK_FIELDS} fields.")
+    data = read_document(file, use_sample)
+
+    logger.info("Re-check started — model=%s fields=%d", model, len(wanted))
+    try:
+        with pdf_on_disk(data) as path:
+            return run_recheck(pdf_path=path, api_key=api_key, deed=current, fields=wanted, model_name=model)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    except genai_errors.APIError as exc:
+        logger.warning("Gemini error during re-check: %s", exc.code)
+        raise gemini_error(exc) from None
 
 
 # Edited results: the UI re-checks and exports the user's corrected deed.

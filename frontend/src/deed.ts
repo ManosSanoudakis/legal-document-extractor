@@ -28,6 +28,29 @@ export function setPath(deed: ExtractionResult, path: string, value: unknown): E
   return { ...deed, [section]: list };
 }
 
+/** Like getPath, but undefined for a path that is not a single field (e.g. "sellers"). */
+export function tryGetPath(deed: ExtractionResult, path: string): unknown {
+  try {
+    return getPath(deed, path);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Fields stored as numbers; everything else is text. */
+export function isNumberField(path: string): boolean {
+  return path.endsWith(".area_sqm") || path.endsWith(".price");
+}
+
+/** "185.000,50" or "185000.5" → number; empty → null; anything else stays text (and fails validation). */
+export function parseNumber(input: string): number | string | null {
+  const s = input.trim();
+  if (!s) return null;
+  const normalised = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
+  const n = Number(normalised.replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) && /\d/.test(s) ? n : s;
+}
+
 /** The deed without the response metadata, as sent to /api/validate and /api/export. */
 export function deedData(deed: ExtractionResult): ExtractionResult {
   const { _meta, _validation, _error, ...data } = deed;
