@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY api.py extractor.py evaluate.py schema.py validators.py accuracy.py export.py jobs.py ./
+COPY api.py extractor.py evaluate.py schema.py validators.py accuracy.py export.py jobs.py history.py ./
 COPY samples/sample_deed.pdf samples/sample_deed.json samples/
 
 EXPOSE 8000

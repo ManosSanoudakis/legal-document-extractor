@@ -3,6 +3,7 @@ import { ApiError, createJob, evaluate, getConfig, getJobResult, recheck, waitFo
 import { BatchView, STAGE_LABELS } from "./components/BatchView";
 import { DocumentCard } from "./components/DocumentCard";
 import { EvaluationView } from "./components/EvaluationView";
+import { HistoryView } from "./components/HistoryView";
 import { ResultsView } from "./components/ResultsView";
 import { SettingsCard } from "./components/SettingsCard";
 import { Alert, Button, Card, Icon, Spinner, Tabs } from "./components/ui";
@@ -49,7 +50,7 @@ function useElapsed(startedAt: number | null): number {
   return startedAt === null ? 0 : Math.max(0, (now - startedAt) / 1000);
 }
 
-type View = "extract" | "batch" | "evaluate";
+type View = "extract" | "batch" | "history" | "evaluate";
 
 /** Extract one document as a background job, reporting its stage, and return the result. */
 async function extractInBackground(
@@ -142,12 +143,15 @@ export default function App() {
                   tabs={[
                     { id: "extract", label: "Extraction", icon: "doc" },
                     { id: "batch", label: "Batch", icon: "file" },
+                    { id: "history", label: "History", icon: "clock" },
                     { id: "evaluate", label: "Model evaluation", icon: "chart" },
                   ]}
                 />
               </div>
               <div className="p-5">
-                {view === "batch" ? (
+                {view === "history" ? (
+                  <HistoryView />
+                ) : view === "batch" ? (
                   <BatchView config={config} model={model} apiKey={apiKey} />
                 ) : view === "extract" ? (
                   <RunPanel

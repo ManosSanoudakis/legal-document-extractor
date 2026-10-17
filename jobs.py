@@ -179,12 +179,14 @@ class JobStore:
                 self._set(doc, status="error", error=message, finished=time.time(), data=None)
                 stop = message if fatal else None
                 continue
-            self._set(doc, status="done", result=result, finished=time.time(), data=None)
+            self._set(doc, result=result, data=None)
+            # Before "done", so whoever fetches the result also sees what on_done added
             if self._on_done:
                 try:
                     self._on_done(job, doc)
                 except Exception:  # noqa: BLE001 — saving to history must not lose the result
                     logger.exception("Job %s: on_done failed for %s", job.id[:8], doc.filename)
+            self._set(doc, status="done", finished=time.time())
         with self._lock:
             job.finished = time.time()
             job.api_key = None  # the key lives only as long as the job

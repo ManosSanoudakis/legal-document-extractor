@@ -1,11 +1,16 @@
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# The API's history database goes to a throwaway folder, never the project's data/
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="deed-history-")
 
 
 @pytest.fixture

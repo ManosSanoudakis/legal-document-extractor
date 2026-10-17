@@ -25,6 +25,7 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
   const [exportError, setExportError] = useState<string | null>(null);
   // The user's corrections, by document id; the export uses them over the raw results
   const edits = useRef<Record<string, ExtractionResult>>({});
+  const checked = useRef<Record<string, string[]>>({});
 
   const running = job?.status === "running";
 
@@ -50,6 +51,7 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
     setResults({});
     setOpen(null);
     edits.current = {};
+    checked.current = {};
     setJobFiles(files);
     try {
       const created = await createJob(files, model, apiKey);
@@ -176,9 +178,13 @@ export function BatchView({ config, model, apiKey }: { config: AppConfig; model:
           <p className="mb-4 font-semibold">{openDoc.filename}</p>
           <ResultsView
             key={openDoc.id}
-            result={edits.current[openDoc.id] ?? results[openDoc.id]}
+            result={results[openDoc.id]}
+            saved={{ edited: edits.current[openDoc.id] ?? null, reviewed: checked.current[openDoc.id] ?? [] }}
             onChange={(deed) => {
               edits.current[openDoc.id] = deed;
+            }}
+            onReviewedChange={(fields) => {
+              checked.current[openDoc.id] = fields;
             }}
             onRecheck={
               fileFor(openDoc) && apiKey.trim()

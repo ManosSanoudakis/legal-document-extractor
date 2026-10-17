@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { exportDeed, validate } from "../api";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { exportDeed, saveHistory, validate } from "../api";
 import { deedData, getPath, parseNumber, setPath, tryGetPath } from "../deed";
 import { area, DEED_TYPES, deedType, downloadJson, fieldLabel, price, text } from "../format";
 import type { ExtractionResult, RecheckAnswer, Source, ValidationIssue } from "../types";
@@ -125,21 +125,49 @@ export function ResultsView({
   onShowPage,
   onRecheck,
   onChange,
+  onReviewedChange,
+  saved,
 }: {
+  /** The model's answer. With _meta.history_id, edits and checked fields are saved to history. */
   result: ExtractionResult;
   onShowPage?: (page: number) => void;
   onRecheck?: (deed: ExtractionResult, fields: string[]) => Promise<RecheckAnswer[]>;
   /** Told about every edit (and undo), with the deed as the user now sees it. */
   onChange?: (deed: ExtractionResult) => void;
+  /** Told whenever the set of fields ticked as checked changes. */
+  onReviewedChange?: (fields: string[]) => void;
+  /** Corrections and checked fields from an earlier session (history). */
+  saved?: { edited: ExtractionResult | null; reviewed: string[] };
 }) {
   const [tab, setTab] = useState<Tab>("parties");
-  const [deed, setDeed] = useState<ExtractionResult>(result);
+  const [deed, setDeed] = useState<ExtractionResult>(
+    saved?.edited ? { ...saved.edited, _meta: result._meta, _validation: result._validation } : result,
+  );
   const [issues, setIssues] = useState<ValidationIssue[] | undefined>(result._validation);
   const [editing, setEditing] = useState(false);
-  const [edited, setEdited] = useState(false);
+  const [edited, setEdited] = useState(Boolean(saved?.edited));
   const [checking, setChecking] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
+  const [reviewed, setReviewed] = useState<Set<string>>(new Set(saved?.reviewed ?? []));
+  const [saveState, setSaveState] = useState<"saving" | "saved" | "error" | null>(null);
+  const touched = useRef(false); // nothing to save until the user changes something
+  const historyId = result._meta?.history_id;
+
+  useEffect(() => {
+    if (touched.current) onReviewedChange?.([...reviewed]);
+  }, [reviewed, onReviewedChange]);
+
+  // Save corrections and checked fields to history shortly after the last change
+  useEffect(() => {
+    if (!historyId || !touched.current) return;
+    setSaveState("saving");
+    const timer = setTimeout(() => {
+      saveHistory(historyId, edited ? deedData(deed) : null, [...reviewed])
+        .then(() => setSaveState("saved"))
+        .catch(() => setSaveState("error"));
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [deed, reviewed, edited, historyId]);
 
   // Re-check the data shortly after the user stops typing
   useEffect(() => {
@@ -159,6 +187,7 @@ export function ResultsView({
   }, [deed, edited, result]);
 
   function update(path: string, value: unknown) {
+    touched.current = true;
     const next = setPath(deed, path, value);
     setDeed(next);
     onChange?.(next);
@@ -166,6 +195,7 @@ export function ResultsView({
   }
 
   function reset() {
+    touched.current = true;
     onChange?.(result);
     setDeed(result);
     setIssues(result._validation);
@@ -175,6 +205,7 @@ export function ResultsView({
   }
 
   function toggleReviewed(field: string) {
+    touched.current = true;
     setReviewed((prev) => {
       const next = new Set(prev);
       if (next.has(field)) next.delete(field);
@@ -242,6 +273,9 @@ export function ResultsView({
             <p className="text-xs text-ink-500 dark:text-stone-400">
               {meta.model} · {meta.pages} page{meta.pages === 1 ? "" : "s"}{meta.text_layer ? " · text checked" : ""} · {meta.elapsed_seconds} s
               {edited && " · edited"}
+              {saveState === "saving" && " · saving…"}
+              {saveState === "saved" && " · saved to history"}
+              {saveState === "error" && " · could not save to history"}
             </p>
           )}
           <div className="flex flex-wrap gap-2">
