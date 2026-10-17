@@ -15,8 +15,10 @@ TRUTH_FILES = [
     *sorted((SAMPLES / "dataset").glob("*.json")),
     *sorted((SAMPLES / "dataset_long").glob("*.json")),
     *sorted((SAMPLES / "dataset_varied").glob("*.json")),
+    *sorted((SAMPLES / "dataset_holdout").glob("*.json")),
 ]
-LONG_PDFS = sorted((SAMPLES / "dataset_long").glob("*.pdf")) + sorted((SAMPLES / "dataset_varied").glob("*.pdf"))
+LONG_PDFS = [pdf for folder in ("dataset_long", "dataset_varied", "dataset_holdout")
+             for pdf in sorted((SAMPLES / folder).glob("*.pdf"))]
 # (scanned folder, the clean folder it was made from)
 SCAN_SETS = [("dataset_scanned", "dataset"), ("dataset_varied_scanned", "dataset_varied")]
 

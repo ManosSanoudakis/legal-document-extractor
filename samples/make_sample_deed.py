@@ -114,6 +114,7 @@ class Style:
     area: str = "words"            # "words" τετραγωνικών μέτρων (τ.μ.) | "short" τ.μ. | "m2" m²
     intro: str = "notary_first"    # "notary_first" | "before_me": ενώπιον εμού (name, συμβολαιογράφου …)
     shuffle_seed: int | None = None  # reorder a long deed's extra sections
+    permit: str = "default"        # "default" υπ' αριθμ. … άδειας | "building" άδεια οικοδομής αριθ. … | "plain"
 
 
 @dataclass
@@ -468,6 +469,21 @@ def vary(spec: DeedSpec, rng: random.Random) -> DeedSpec:
     return spec
 
 
+PERMIT_OFFICES = [
+    "του Πολεοδομικού Γραφείου Δοκιμών",
+    "της Υπηρεσίας Δόμησης Δήμου Δοκιμών",
+    "της Διεύθυνσης Πολεοδομίας Νομαρχίας Δοκιμών",
+]
+
+
+def reword_permit(spec: DeedSpec, rng: random.Random) -> DeedSpec:
+    """Word the permit and name its issuing office differently from every other set (the held-out set)."""
+    number = spec.permit.split()[0]
+    spec.permit = f"{number} {rng.choice(PERMIT_OFFICES)}"
+    spec.style.permit = rng.choice(["default", "building", "plain"])
+    return spec
+
+
 def fmt_date(d: date, genitive: bool = False) -> str:
     """15η Μαρτίου 2024, or 15ης Μαρτίου 2024 after a genitive ("της ...")."""
     return f"{d.day}{'ης' if genitive else 'η'} {GREEK_MONTHS[d.month - 1]} {d.year}"
@@ -701,7 +717,10 @@ def deed_html(d: DeedSpec) -> str:
         f"(<b>{d.property_type}</b>){floor}, {area}, "
         f"που βρίσκεται στη διεύθυνση {d.property_address}, στη {d.municipal_unit}, και φέρει Κωδικό Αριθμό "
         f"Εθνικού Κτηματολογίου (ΚΑΕΚ) <b>{d.kaek}</b>. Το ακίνητο ανεγέρθηκε ή οριοθετήθηκε νόμιμα "
-        f"δυνάμει της υπ' αριθμ. {d.permit} άδειας.</p>"
+        + {
+            "building": f"σύμφωνα με την άδεια οικοδομής αριθ. {d.permit}.</p>",
+            "plain": f"με βάση την οικοδομική άδεια {d.permit}.</p>",
+        }.get(st.permit, f"δυνάμει της υπ' αριθμ. {d.permit} άδειας.</p>")
     ) + sections(extra["after_property"])
     if sale:
         amount = {
@@ -920,6 +939,9 @@ def main() -> None:
     parser.add_argument("--harsh", action="store_true",
                         help="Also write harsh scans (stamps, signatures, notes) of the varied deeds "
                              "to samples/dataset_varied_scanned/")
+    parser.add_argument("--holdout", type=int, default=0,
+                        help="Also generate N varied long deeds in samples/dataset_holdout/, with the building "
+                             "permit worded and issued differently: a set no prompt change was tuned on")
     parser.add_argument("--seed", type=int, default=7, help="Random seed, so the dataset is reproducible")
     args = parser.parse_args()
 
@@ -958,6 +980,14 @@ def main() -> None:
             rng = random.Random(args.seed + 3)
             for i in range(1, args.varied + 1):
                 scan(out / f"deed_{i:02d}.pdf", scanned / f"deed_{i:02d}.pdf", rng, harsh=True)
+
+    if args.holdout:
+        out = ROOT / "dataset_holdout"
+        out.mkdir(exist_ok=True)
+        rng = random.Random(args.seed + 4)
+        for i in range(1, args.holdout + 1):
+            spec = reword_permit(vary(add_distractors(random_deed(rng), rng), rng), rng)
+            render(spec, out / f"deed_{i:02d}.pdf")
 
 
 if __name__ == "__main__":

@@ -81,6 +81,7 @@ def test_values_match_edge_cases():
     # A permit copied with its surrounding words is still the same permit; a bare number is not
     permit = "8111/2001 του Πολεοδομικού Γραφείου Δοκιμών"
     assert values_match("permit", permit, "υπ' αριθμ. 8111/2001 του Πολεοδομικού Γραφείου Δοκιμών άδειας")
+    assert values_match("permit", permit, "αριθ. 8111/2001 του Πολεοδομικού Γραφείου Δοκιμών")
     assert not values_match("permit", permit, "υπ' αριθμ. 8111/2001")
     assert not values_match("permit", permit, "8112/2001 του Πολεοδομικού Γραφείου Δοκιμών")
     assert values_match("number", 85.4, "85,40")

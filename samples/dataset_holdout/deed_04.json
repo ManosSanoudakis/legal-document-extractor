@@ -1,0 +1,38 @@
+{
+  "notary": {
+    "name": "Νικόλαος Εικονικός",
+    "location": "Αθήνα",
+    "registry_number": "39.213"
+  },
+  "sellers": [
+    {
+      "full_name": "Σοφία Δοκιμαστή του Ιωάννη",
+      "tax_id": "252150534",
+      "id_document": "ΑΤ 896583",
+      "address": "Οδός Ανύπαρκτης 99, Αθήνα"
+    }
+  ],
+  "buyers": [
+    {
+      "full_name": "Γεωργία Υποθετική του Ιωάννη",
+      "tax_id": "385386605",
+      "id_document": "ΑΤ 945599",
+      "address": "Οδός Πλασματικής 10, Πάτρα"
+    }
+  ],
+  "legal_representatives": [],
+  "property": {
+    "type": "οικόπεδο",
+    "address": "Οδός Φανταστικής 89, Αθήνα",
+    "municipal_unit": "Δημοτική Ενότητα Κυψέλης",
+    "floor": null,
+    "area_sqm": 1114.85,
+    "kaek": "990241459954/0/3",
+    "building_permit": "231/1979 της Υπηρεσίας Δόμησης Δήμου Δοκιμών"
+  },
+  "transaction": {
+    "deed_type": "parental_provision",
+    "price": null,
+    "date": "2018-03-25"
+  }
+}

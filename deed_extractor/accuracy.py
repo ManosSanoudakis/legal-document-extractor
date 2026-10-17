@@ -43,7 +43,7 @@ REP_FIELDS = {"full_name": "name", "represents": "name", "tax_id": "digits", "id
 # "Δημοτική Ενότητα Ζωγράφου" and "Ζωγράφου" name the same unit
 _UNIT_LABEL = re.compile(r"^(δημοτικη ενοτητα|δ ε) ")
 # "υπ' αριθμ. 1234/2005 του Πολεοδομικού Γραφείου άδειας" is the permit copied with its sentence
-_PERMIT_WORDS = re.compile(r"^(υπ αριθμ|αριθμ|αρ) | αδεια[σς]?$")  # casefold() turns final ς into σ
+_PERMIT_WORDS = re.compile(r"^(υπ αριθμ|αριθμ|αριθ|αρ) | αδεια[σς]?$")  # casefold() turns final ς into σ
 
 
 def _to_number(value: object) -> float | None:
