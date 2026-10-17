@@ -141,7 +141,8 @@ def _number_key(value: object) -> str:
     return re.sub(r"(?<=\d)[\s.](?=\d)", "", str(value).strip())
 
 
-def _in_text(key: str, value: object, text: str) -> bool:
+def in_text(key: str, value: object, text: str) -> bool:
+    """Does a copied value appear in the PDF's text layer?"""
     if key in DIGIT_FIELDS:
         needle = _number_key(value)
         # Whole numbers only: 123456789 must not match inside 9123456789
@@ -151,6 +152,26 @@ def _in_text(key: str, value: object, text: str) -> bool:
             return re.sub(r"\s", "", str(v)).upper().translate(LOOKALIKES)
         return compact(value) in compact(text)
     return norm_text(value) in norm_text(text)
+
+
+def values_agree(key: str, a: object, b: object) -> bool:
+    """Do two readings of the same field say the same thing, ignoring formatting?"""
+    if a is None or b is None:
+        return a is None and b is None
+    if key in DIGIT_FIELDS:
+        return _number_key(a) == _number_key(b)
+    if key == "id_document":
+        return re.sub(r"\s", "", str(a)).upper().translate(LOOKALIKES) == \
+            re.sub(r"\s", "", str(b)).upper().translate(LOOKALIKES)
+    if key in ("area_sqm", "price"):
+        def number(v: object) -> str:
+            s = re.sub(r"[^\d,.]", "", str(v))
+            return s.replace(".", "").replace(",", ".") if "," in s else s
+        try:
+            return abs(float(number(a)) - float(number(b))) < 0.01
+        except ValueError:
+            return False
+    return norm_text(a) == norm_text(b)
 
 
 def _check_in_text(data: dict, text: str) -> list[dict]:
@@ -163,7 +184,7 @@ def _check_in_text(data: dict, text: str) -> list[dict]:
         for prefix, entry in entries:
             for key in keys:
                 value = entry.get(key)
-                if value is not None and str(value).strip() and not _in_text(key, value, text):
+                if value is not None and str(value).strip() and not in_text(key, value, text):
                     issues.append(_issue(f"{prefix}.{key}", value, "Not found in the PDF's text: check it on the page.",
                                          "error"))
     return issues

@@ -97,3 +97,29 @@ def test_evaluate_upload_has_no_ground_truth(client, monkeypatch):
     assert response.status_code == 200
     assert seen["truth"] is None
     assert response.json()["pdf"] == "mine.pdf"
+
+
+def test_recheck_validates_its_input(client, sample_truth):
+    import json
+
+    def post(**data):
+        return client.post("/api/recheck", headers=KEY, data={"use_sample": "true", **data})
+
+    assert post(deed="not json", fields="[]").status_code == 422
+    assert post(deed=json.dumps(sample_truth), fields="[]").status_code == 422
+    assert post(deed=json.dumps(sample_truth), fields=json.dumps(["property.colour"])).status_code == 422
+    assert client.post("/api/recheck", data={"use_sample": "true"}).status_code == 401
+
+
+def test_recheck_returns_answers(client, monkeypatch, sample_truth):
+    import json
+
+    def fake(pdf_path, api_key, deed, fields, model_name):
+        return {"answers": [{"field": fields[0], "value": "x", "agrees": False}], "_meta": {}}
+
+    monkeypatch.setattr(api, "run_recheck", fake)
+    response = client.post("/api/recheck", headers=KEY, data={
+        "use_sample": "true", "deed": json.dumps(sample_truth), "fields": json.dumps(["property.kaek"]),
+    })
+    assert response.status_code == 200
+    assert response.json()["answers"][0]["field"] == "property.kaek"

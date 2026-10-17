@@ -1,4 +1,11 @@
-import type { AppConfig, DocumentChoice, EvaluationReport, ExtractionResult, ValidationIssue } from "./types";
+import type {
+  AppConfig,
+  DocumentChoice,
+  EvaluationReport,
+  ExtractionResult,
+  RecheckAnswer,
+  ValidationIssue,
+} from "./types";
 
 export const SAMPLE_URL = "/api/sample";
 
@@ -50,6 +57,26 @@ export function evaluate(doc: DocumentChoice, apiKey: string): Promise<Evaluatio
     headers: { "X-Gemini-Key": apiKey },
     body: documentForm(doc),
   });
+}
+
+/** Read a few flagged fields again at higher resolution (one model call). */
+export async function recheck(
+  doc: DocumentChoice,
+  model: string,
+  apiKey: string,
+  deed: ExtractionResult,
+  fields: string[],
+): Promise<RecheckAnswer[]> {
+  const form = documentForm(doc);
+  form.append("model", model);
+  form.append("deed", JSON.stringify(deed));
+  form.append("fields", JSON.stringify(fields));
+  const body = await request<{ answers: RecheckAnswer[] }>("/api/recheck", {
+    method: "POST",
+    headers: { "X-Gemini-Key": apiKey },
+    body: form,
+  });
+  return body.answers;
 }
 
 /** Re-run the backend checks on a deed the user has edited. */

@@ -88,6 +88,35 @@ class Deed(BaseModel):
     )
 
 
+SECTION_MODELS: dict[str, type[BaseModel]] = {
+    "notary": Notary,
+    "sellers": Party,
+    "buyers": Party,
+    "legal_representatives": Representative,
+    "property": Property,
+    "transaction": Transaction,
+}
+
+
+def field_description(section: str, key: str) -> str | None:
+    """The schema's description of one field, e.g. ("property", "kaek"); None if no such field."""
+    model = SECTION_MODELS.get(section)
+    info = model.model_fields.get(key) if model else None
+    return info.description if info else None
+
+
+class RecheckAnswer(BaseModel):
+    field: str = Field(description='The field path exactly as asked, e.g. "property.kaek"')
+    value: str | None = Field(description="The value exactly as written in the document, or null if absent")
+    page: int | None = Field(description="Page number where the value appears (the first page is 1)")
+    quote: str | None = Field(description="Exact text copied from the document that contains the value")
+
+
+class Recheck(BaseModel):
+    """A second, independent reading of a few fields."""
+    answers: list[RecheckAnswer]
+
+
 def empty_deed() -> dict:
     """A deed with every field null and every list empty."""
     return {

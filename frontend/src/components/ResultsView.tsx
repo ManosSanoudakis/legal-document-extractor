@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { exportDeed, validate } from "../api";
-import { deedData, getPath, setPath } from "../deed";
+import { deedData, getPath, parseNumber, setPath, tryGetPath } from "../deed";
 import { area, DEED_TYPES, deedType, downloadJson, fieldLabel, price, text } from "../format";
-import type { ExtractionResult, Source, ValidationIssue } from "../types";
-import { Alert, Button, Cell, Empty, FieldGrid, Icon, SectionTitle, Spinner, Stat, Table, Tabs, cx } from "./ui";
+import type { ExtractionResult, RecheckAnswer, Source, ValidationIssue } from "../types";
+import { ReviewPanel } from "./ReviewPanel";
+import { Alert, Button, Cell, Empty, FieldGrid, Icon, SectionTitle, Stat, Table, Tabs, cx } from "./ui";
 
 type Tab = "parties" | "property" | "notary" | "sources" | "json";
 type Kind = "text" | "number" | "deedType";
@@ -24,15 +25,6 @@ function useDeed(): DeedContextValue {
   const ctx = useContext(DeedContext);
   if (!ctx) throw new Error("useDeed outside ResultsView");
   return ctx;
-}
-
-/** "185.000,50" or "185000.5" → number; empty → null; anything else stays text (and fails validation). */
-function parseNumber(input: string): number | string | null {
-  const s = input.trim();
-  if (!s) return null;
-  const normalised = s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s;
-  const n = Number(normalised.replace(/[^\d.-]/g, ""));
-  return Number.isFinite(n) && /\d/.test(s) ? n : s;
 }
 
 const inputClass =
@@ -125,12 +117,17 @@ const repColumns = [
   { header: "ID document", cell: (_: unknown, i: number) => <Value path={`legal_representatives[${i}].id_document`} />, className: "whitespace-nowrap" },
 ];
 
+/** Flags from the PDF's text layer; /api/validate cannot re-run them, as it has no PDF. */
+const TEXT_CHECK = "PDF's text";
+
 export function ResultsView({
   result,
   onShowPage,
+  onRecheck,
 }: {
   result: ExtractionResult;
   onShowPage?: (page: number) => void;
+  onRecheck?: (deed: ExtractionResult, fields: string[]) => Promise<RecheckAnswer[]>;
 }) {
   const [tab, setTab] = useState<Tab>("parties");
   const [deed, setDeed] = useState<ExtractionResult>(result);
@@ -139,19 +136,24 @@ export function ResultsView({
   const [edited, setEdited] = useState(false);
   const [checking, setChecking] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
 
   // Re-check the data shortly after the user stops typing
   useEffect(() => {
     if (!edited) return;
     setChecking(true);
     const timer = setTimeout(() => {
+      // Text-layer flags stay on fields the user has not changed
+      const textFlags = (result._validation ?? []).filter(
+        (i) => i.message.includes(TEXT_CHECK) && text(tryGetPath(deed, i.field)) === text(tryGetPath(result, i.field)),
+      );
       validate(deedData(deed))
-        .then(setIssues)
+        .then((fresh) => setIssues([...fresh, ...textFlags]))
         .catch(() => undefined)
         .finally(() => setChecking(false));
     }, 400);
     return () => clearTimeout(timer);
-  }, [deed, edited]);
+  }, [deed, edited, result]);
 
   function update(path: string, value: unknown) {
     setDeed((d) => setPath(d, path, value));
@@ -163,6 +165,16 @@ export function ResultsView({
     setIssues(result._validation);
     setEdited(false);
     setEditing(false);
+    setReviewed(new Set());
+  }
+
+  function toggleReviewed(field: string) {
+    setReviewed((prev) => {
+      const next = new Set(prev);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
   }
 
   async function download(format: "xlsx" | "csv") {
@@ -206,7 +218,18 @@ export function ResultsView({
           <Stat label="Date" value={text(txn.date)} />
           <Stat label="Area" value={area(prop.area_sqm)} />
         </div>
-        <Checks issues={issues} checking={checking} />
+        <ReviewPanel
+          deed={deed}
+          issues={issues}
+          checking={checking}
+          reviewed={reviewed}
+          onToggleReviewed={toggleReviewed}
+          onUse={(field, value) => {
+            update(field, value);
+            setReviewed((prev) => new Set(prev).add(field));
+          }}
+          onRecheck={onRecheck && ((fields) => onRecheck(deedData(deed), fields))}
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           {meta && (
@@ -354,42 +377,5 @@ export function JsonPanel({ data, filename }: { data: unknown; filename: string 
         {json}
       </pre>
     </div>
-  );
-}
-
-/** Results of the automatic sanity checks run on the extracted data. */
-function Checks({ issues, checking }: { issues: ValidationIssue[] | undefined; checking: boolean }) {
-  if (!issues) return null;
-  const status: ReactNode = checking && (
-    <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-normal opacity-75">
-      <Spinner /> Re-checking
-    </span>
-  );
-  if (issues.length === 0) {
-    return (
-      <Alert tone="info">
-        All automatic checks passed: tax IDs, ΚΑΕΚ format, date, amounts and source quotes.{status}
-      </Alert>
-    );
-  }
-  const hasErrors = issues.some((i) => i.severity === "error");
-  return (
-    <Alert tone={hasErrors ? "error" : "warning"}>
-      <p className="font-semibold">
-        {issues.length} {issues.length === 1 ? "value needs" : "values need"} checking against the document
-        {status}
-      </p>
-      <ul className="mt-1.5 space-y-1">
-        {issues.map((issue, i) => (
-          <li key={i}>
-            <span className="font-medium">{fieldLabel(issue.field)}</span>
-            {issue.value !== null && issue.value !== undefined && (
-              <span className="font-mono text-xs"> {text(issue.value)}</span>
-            )}
-            : {issue.message}
-          </li>
-        ))}
-      </ul>
-    </Alert>
   );
 }

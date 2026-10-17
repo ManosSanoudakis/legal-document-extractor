@@ -42,6 +42,17 @@ export interface Source {
   quote: string | null;
 }
 
+/** A second, independent reading of one flagged field (see extractor.run_recheck). */
+export interface RecheckAnswer {
+  field: string;
+  value: string | null;
+  page: number | null;
+  quote: string | null;
+  agrees: boolean;
+  /** null when the PDF has no text layer to look in */
+  found_in_text: boolean | null;
+}
+
 /** A sanity check that failed (see validators.py). */
 export interface ValidationIssue {
   field: string;
