@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from accuracy import score_accuracy
-from extractor import GeminiExtractor, pdf_to_images
+from extractor import GeminiExtractor, pdf_page_texts, pdf_to_images
 
 logger = logging.getLogger(__name__)
 
@@ -95,12 +95,13 @@ class RunResult:
 
 def _run_once(
     image_paths: list[Path],
+    page_texts: list[str],
     api_key: str,
     model_name: str,
 ) -> RunResult:
     extractor = GeminiExtractor(api_key=api_key, model_name=model_name)
     try:
-        result  = extractor.extract(image_paths)
+        result  = extractor.extract(image_paths, page_texts)
         score   = completeness_score(result)
         elapsed = result.get("_meta", {}).get("elapsed_seconds", 0.0)
         return RunResult(
@@ -145,9 +146,10 @@ def run_evaluation(
 
     with tempfile.TemporaryDirectory() as pages_dir:
         image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
+        page_texts = pdf_page_texts(pdf_path)
         # Models run in parallel: total time is the slowest model, not the sum
         with ThreadPoolExecutor(max_workers=len(models)) as pool:
-            runs = list(pool.map(lambda m: _run_once(image_paths, api_key, m), models))
+            runs = list(pool.map(lambda m: _run_once(image_paths, page_texts, api_key, m), models))
 
     if truth is not None:
         for r in runs:

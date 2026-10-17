@@ -97,3 +97,24 @@ def test_missing_parties_and_same_person_both_sides(sample_truth):
     assert "buyers[0].tax_id" in fields(validate_deed(deed, today=TODAY))
     deed["sellers"] = []
     assert "sellers" in fields(validate_deed(deed, today=TODAY))
+
+
+def test_values_missing_from_the_text_layer_are_flagged(sample_truth):
+    text = "Αριθμός 12.345 ... ΚΑΕΚ 999901000012/0/5 ... Α.Φ.Μ. 123456789 ... ΑΚ 000101"
+    deed = {"notary": {"registry_number": "12.345"}, "property": {"kaek": "999901000012/0/5"},
+            "sellers": [{"tax_id": "123456789", "id_document": "AK 000101"}]}  # Latin AK
+    def not_in_text(d: dict) -> set[str]:
+        return fields(i for i in validate_deed(d, TODAY, text=text) if "PDF's text" in i["message"])
+
+    assert not_in_text(deed) == set()
+    # Two swapped digits still make a 12-digit ΚΑΕΚ, so only the text can catch them
+    deed["property"]["kaek"] = "999910000012/0/5"
+    # A number found only inside a longer one does not count
+    deed["sellers"][0]["tax_id"] = "23456789"
+    assert not_in_text(deed) == {"property.kaek", "sellers[0].tax_id"}
+
+
+def test_no_text_means_no_text_check(sample_truth):
+    deed = copy.deepcopy(sample_truth)
+    deed["property"]["kaek"] = "999910000012/0/5"
+    assert not any("PDF's text" in i["message"] for i in validate_deed(deed, TODAY))
