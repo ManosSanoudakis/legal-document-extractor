@@ -3,6 +3,7 @@ import type {
   DocumentChoice,
   EvaluationReport,
   ExtractionResult,
+  Job,
   RecheckAnswer,
   ValidationIssue,
 } from "./types";
@@ -51,6 +52,32 @@ export function extract(doc: DocumentChoice, model: string, apiKey: string): Pro
   });
 }
 
+/** Start a background extraction of one document or many; returns at once. */
+export function createJob(docs: DocumentChoice | File[], model: string, apiKey: string): Promise<Job> {
+  const form = new FormData();
+  if (Array.isArray(docs)) docs.forEach((f) => form.append("files", f));
+  else if (docs.kind === "sample") form.append("use_sample", "true");
+  else form.append("files", docs.file);
+  form.append("model", model);
+  return request<Job>("/api/jobs", { method: "POST", headers: { "X-Gemini-Key": apiKey }, body: form });
+}
+
+export function getJobResult(jobId: string, docId: string): Promise<ExtractionResult> {
+  return request<ExtractionResult>(`/api/jobs/${jobId}/documents/${docId}`);
+}
+
+/** Poll a job about once a second, reporting progress, until every document is done or failed. */
+export async function waitForJob(job: Job, onUpdate: (job: Job) => void): Promise<Job> {
+  let current = job;
+  onUpdate(current);
+  while (current.status !== "done") {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    current = await request<Job>(`/api/jobs/${job.id}`);
+    onUpdate(current);
+  }
+  return current;
+}
+
 export function evaluate(doc: DocumentChoice, apiKey: string): Promise<EvaluationReport> {
   return request<EvaluationReport>("/api/evaluate", {
     method: "POST",
@@ -89,21 +116,30 @@ export async function validate(deed: ExtractionResult): Promise<ValidationIssue[
   return body.issues;
 }
 
-/** Download the deed as an Excel or CSV file. */
-export async function exportDeed(deed: ExtractionResult, format: "xlsx" | "csv"): Promise<void> {
+async function download(path: string, body: unknown, filename: string): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`/api/export?format=${format}`, {
+    res = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(deed),
+      body: JSON.stringify(body),
     });
   } catch {
     throw new ApiError("Cannot reach the API server. Is the backend running?", 0);
   }
   if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
   const url = URL.createObjectURL(await res.blob());
-  const a = Object.assign(document.createElement("a"), { href: url, download: `extracted_deed.${format}` });
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Download the deed as an Excel or CSV file. */
+export function exportDeed(deed: ExtractionResult, format: "xlsx" | "csv"): Promise<void> {
+  return download(`/api/export?format=${format}`, deed, `extracted_deed.${format}`);
+}
+
+/** Download many deeds as one file: one row per deed. */
+export function exportBatch(deeds: { name: string; deed: ExtractionResult }[], format: "xlsx" | "csv"): Promise<void> {
+  return download(`/api/export/batch?format=${format}`, { deeds }, `deeds.${format}`);
 }

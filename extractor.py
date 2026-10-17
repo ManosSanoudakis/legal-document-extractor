@@ -6,6 +6,7 @@ import os
 import tempfile
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
 
 import fitz
@@ -278,15 +279,21 @@ def run_pipeline(
     pdf_path: str,
     api_key: str,
     model_name: str = MODELS[0],
+    on_stage: Callable[[str], None] | None = None,
 ) -> dict:
     """PDF → page images (+ text layer) → VLM extraction → structured dict.
 
     Page images are written to a temporary directory that is deleted
-    afterwards, so no document data is left on disk.
+    afterwards, so no document data is left on disk. on_stage, if given, is
+    told "reading" and then "extracting", for progress reporting.
     """
+    report = on_stage or (lambda stage: None)
     with tempfile.TemporaryDirectory() as pages_dir:
+        report("reading")
         image_paths = pdf_to_images(pdf_path, output_dir=pages_dir)
-        return _get_extractor(model_name, api_key).extract(image_paths, pdf_page_texts(pdf_path))
+        texts = pdf_page_texts(pdf_path)
+        report("extracting")
+        return _get_extractor(model_name, api_key).extract(image_paths, texts)
 
 MAX_RECHECK_FIELDS = 30
 ROLE_LABELS = {"sellers": "Πωλητής", "buyers": "Αγοραστής", "legal_representatives": "Εκπρόσωπος"}

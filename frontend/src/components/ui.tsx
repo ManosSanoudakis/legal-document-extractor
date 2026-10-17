@@ -320,7 +320,7 @@ export function Alert({ tone, children }: { tone: "error" | "warning" | "info"; 
       role={tone === "error" ? "alert" : "status"}
       className={cx("flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm", styles)}
     >
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }

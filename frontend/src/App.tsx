@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ApiError, evaluate, extract, getConfig, recheck } from "./api";
+import { ApiError, createJob, evaluate, getConfig, getJobResult, recheck, waitForJob } from "./api";
+import { BatchView, STAGE_LABELS } from "./components/BatchView";
 import { DocumentCard } from "./components/DocumentCard";
 import { EvaluationView } from "./components/EvaluationView";
 import { ResultsView } from "./components/ResultsView";
 import { SettingsCard } from "./components/SettingsCard";
 import { Alert, Button, Card, Icon, Spinner, Tabs } from "./components/ui";
-import type { AppConfig, DocumentChoice, EvaluationReport, ExtractionResult } from "./types";
+import type { AppConfig, DocumentChoice, EvaluationReport, ExtractionResult, JobDocument } from "./types";
 
 type Task<T> =
   | { status: "idle" }
@@ -48,7 +49,20 @@ function useElapsed(startedAt: number | null): number {
   return startedAt === null ? 0 : Math.max(0, (now - startedAt) / 1000);
 }
 
-type View = "extract" | "evaluate";
+type View = "extract" | "batch" | "evaluate";
+
+/** Extract one document as a background job, reporting its stage, and return the result. */
+async function extractInBackground(
+  doc: DocumentChoice,
+  model: string,
+  apiKey: string,
+  onStage: (doc: JobDocument) => void,
+): Promise<ExtractionResult> {
+  const job = await waitForJob(await createJob(doc, model, apiKey), (j) => onStage(j.documents[0]));
+  const [result] = job.documents;
+  if (result.status === "error") throw new Error(result.error ?? "Extraction failed");
+  return getJobResult(job.id, result.id);
+}
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -58,6 +72,7 @@ export default function App() {
   const [doc, setDoc] = useState<DocumentChoice | null>(null);
   const [view, setView] = useState<View>("extract");
   const [previewPage, setPreviewPage] = useState<number | null>(null);
+  const [stage, setStage] = useState<JobDocument | null>(null);
   const extraction = useTask<ExtractionResult>();
   const evaluation = useTask<EvaluationReport>();
 
@@ -126,12 +141,15 @@ export default function App() {
                   onChange={setView}
                   tabs={[
                     { id: "extract", label: "Extraction", icon: "doc" },
+                    { id: "batch", label: "Batch", icon: "file" },
                     { id: "evaluate", label: "Model evaluation", icon: "chart" },
                   ]}
                 />
               </div>
               <div className="p-5">
-                {view === "extract" ? (
+                {view === "batch" ? (
+                  <BatchView config={config} model={model} apiKey={apiKey} />
+                ) : view === "extract" ? (
                   <RunPanel
                     intro={
                       <>
@@ -139,10 +157,14 @@ export default function App() {
                       </>
                     }
                     label={`Extract with ${model.replace("gemini-", "")}`}
-                    runningLabel="Reading the document…"
+                    runningLabel={stage ? `${STAGE_LABELS[stage.status]}…` : "Starting…"}
                     missing={missing}
                     task={extraction.task}
-                    onRun={() => doc && extraction.run(() => extract(doc, model, apiKey.trim()))}
+                    onRun={() => {
+                      if (!doc) return;
+                      setStage(null);
+                      extraction.run(() => extractInBackground(doc, model, apiKey.trim(), setStage));
+                    }}
                     render={(data) => (
                       <ResultsView
                         result={data}

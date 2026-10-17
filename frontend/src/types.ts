@@ -99,6 +99,26 @@ export interface AppConfig {
   sample_available: boolean;
   max_file_mb: number;
   max_pages: number;
+  max_batch_files: number;
+}
+
+/** A document's progress in a background job (see jobs.py). */
+export type JobStage = "queued" | "reading" | "extracting" | "done" | "error";
+
+export interface JobDocument {
+  id: string;
+  filename: string;
+  status: JobStage;
+  error: string | null;
+  elapsed_seconds: number | null;
+  summary: { deed_type: string | null; price: number | null; date: string | null; flags: number; errors: number } | null;
+}
+
+export interface Job {
+  id: string;
+  model: string;
+  status: "running" | "done";
+  documents: JobDocument[];
 }
 
 /** The document the user picked: the bundled sample or an uploaded file. */

@@ -123,3 +123,55 @@ def test_recheck_returns_answers(client, monkeypatch, sample_truth):
     })
     assert response.status_code == 200
     assert response.json()["answers"][0]["field"] == "property.kaek"
+
+
+def test_batch_job_end_to_end(client, monkeypatch, sample_truth):
+    import time
+
+    def fake_pipeline(pdf_path, api_key, model_name, on_stage=None):
+        on_stage("reading")
+        return {**sample_truth, "_validation": []}
+
+    monkeypatch.setattr(api, "run_pipeline", fake_pipeline)
+    pdf = api.SAMPLE_PDF.read_bytes()
+    files = [("files", ("one.pdf", pdf, "application/pdf")), ("files", ("two.pdf", pdf, "application/pdf"))]
+    response = client.post("/api/jobs", headers=KEY, files=files)
+    assert response.status_code == 202
+    job_id = response.json()["id"]
+
+    for _ in range(250):
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] == "done":
+            break
+        time.sleep(0.02)
+    assert [d["filename"] for d in job["documents"]] == ["one.pdf", "two.pdf"]
+    assert all(d["status"] == "done" for d in job["documents"])
+    result = client.get(f"/api/jobs/{job_id}/documents/{job['documents'][0]['id']}").json()
+    assert result["notary"] == sample_truth["notary"]
+    assert client.get("/api/jobs/nope").status_code == 404
+
+
+def test_batch_job_checks_every_file(client):
+    pdf = api.SAMPLE_PDF.read_bytes()
+    files = [("files", ("ok.pdf", pdf, "application/pdf")), ("files", ("bad.pdf", b"hello", "application/pdf"))]
+    response = client.post("/api/jobs", headers=KEY, files=files)
+    assert response.status_code == 415
+    assert "bad.pdf" in response.json()["detail"]
+    too_many = [("files", (f"{i}.pdf", pdf, "application/pdf")) for i in range(api.MAX_BATCH_FILES + 1)]
+    assert client.post("/api/jobs", headers=KEY, files=too_many).status_code == 413
+
+
+def test_batch_export(client, sample_truth):
+    import io
+
+    from openpyxl import load_workbook
+
+    deeds = [{"name": "a.pdf", "deed": sample_truth}, {"name": "b.pdf", "deed": sample_truth}]
+    wb = load_workbook(io.BytesIO(client.post("/api/export/batch?format=xlsx", json={"deeds": deeds}).content))
+    assert wb.sheetnames == ["Deeds", "People"]
+    rows = list(wb["Deeds"].values)
+    assert rows[0][0] == "File" and [r[0] for r in rows[1:]] == ["a.pdf", "b.pdf"]
+    assert len(list(wb["People"].values)) == 1 + 2 * 4  # 3 parties + 1 representative per deed
+    csv = client.post("/api/export/batch?format=csv", json={"deeds": deeds}).content.decode("utf-8-sig")
+    assert csv.splitlines()[1].startswith("a.pdf,")
+    assert client.post("/api/export/batch", json={"deeds": [{"name": "x"}]}).status_code == 422

@@ -2,7 +2,8 @@
 Export an extracted (and possibly hand-corrected) deed to CSV or Excel.
 
 CSV is one flat table of field / value rows. Excel has two sheets: the deed
-details, and one row per person with their role.
+details, and one row per person with their role. Many deeds export as one
+row per deed, plus (in Excel) everyone from every deed with their file name.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import io
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 DETAIL_FIELDS = [
     ("Notary", "notary", "name", "Name"),
@@ -59,6 +61,20 @@ def to_csv(deed: dict) -> bytes:
     return ("﻿" + out.getvalue()).encode("utf-8")
 
 
+def _style(sheet, widths: list[int]) -> None:
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for i, width in enumerate(widths):
+        sheet.column_dimensions[get_column_letter(i + 1)].width = width
+    sheet.freeze_panes = "A2"
+
+
+def _xlsx_bytes(wb: Workbook) -> bytes:
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 def to_xlsx(deed: dict) -> bytes:
     wb = Workbook()
     details = wb.active
@@ -72,13 +88,49 @@ def to_xlsx(deed: dict) -> bytes:
     for row in people_rows(deed):
         people.append(row)
 
-    for sheet, widths in ((details, [14, 18, 60]), (people, [16, 40, 16, 16, 45, 40])):
-        for cell in sheet[1]:
-            cell.font = Font(bold=True)
-        for col, width in zip("ABCDEF", widths, strict=False):  # fewer widths than letters is fine
-            sheet.column_dimensions[col].width = width
-        sheet.freeze_panes = "A2"
+    _style(details, [14, 18, 60])
+    _style(people, [16, 40, 16, 16, 45, 40])
+    return _xlsx_bytes(wb)
 
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    return buffer.getvalue()
+# ---------------------------------------------------------------------------
+# Many deeds at once (batch or history): one row per deed
+# ---------------------------------------------------------------------------
+
+BATCH_COLUMNS = ["File", *(label for _, _, _, label in DETAIL_FIELDS), "Sellers", "Buyers"]
+
+
+def batch_rows(deeds: list[tuple[str, dict]]) -> list[list]:
+    def names(deed: dict, key: str) -> str:
+        return "; ".join(p.get("full_name") or "?" for p in deed.get(key) or [])
+
+    return [
+        [name, *(row[2] for row in detail_rows(deed)), names(deed, "sellers"), names(deed, "buyers")]
+        for name, deed in deeds
+    ]
+
+
+def batch_to_csv(deeds: list[tuple[str, dict]]) -> bytes:
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(BATCH_COLUMNS)
+    writer.writerows(batch_rows(deeds))
+    return ("﻿" + out.getvalue()).encode("utf-8")
+
+
+def batch_to_xlsx(deeds: list[tuple[str, dict]]) -> bytes:
+    wb = Workbook()
+    table = wb.active
+    table.title = "Deeds"
+    table.append(BATCH_COLUMNS)
+    for row in batch_rows(deeds):
+        table.append(row)
+
+    people = wb.create_sheet("People")
+    people.append(["File", *PEOPLE_COLUMNS])
+    for name, deed in deeds:
+        for row in people_rows(deed):
+            people.append([name, *row])
+
+    _style(table, [28] + [18] * len(DETAIL_FIELDS) + [45, 45])
+    _style(people, [28, 16, 40, 16, 16, 45, 40])
+    return _xlsx_bytes(wb)

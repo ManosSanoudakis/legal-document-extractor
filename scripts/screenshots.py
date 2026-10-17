@@ -9,6 +9,7 @@ With GEMINI_API_KEY set, the screenshots show a real extraction and model
 evaluation of the sample deed. Without it, /api/extract is answered with demo
 data built from the sample's known answers (labelled "demo" in the UI), and
 the evaluation screenshot is skipped, so no model results are invented.
+The batch screenshot uses five deeds from samples/dataset.
 
 Uses the installed Google Chrome (or Edge with --browser msedge), so no
 browser download is needed.
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -63,6 +65,22 @@ def demo_result() -> dict:
     return result
 
 
+def demo_job(body: bytes, result: dict) -> dict:
+    """A finished job with one document per uploaded file (or the sample), all with the demo result."""
+    names = re.findall(rb'filename="([^"]+)"', body) or [SAMPLE.name.encode()]
+    txn, issues = result["transaction"], result["_validation"]
+    summary = {"deed_type": txn["deed_type"], "price": txn["price"], "date": txn["date"], "flags": len(issues),
+               "errors": sum(1 for i in issues if i["severity"] == "error")}
+    return {
+        "id": "demo", "model": "demo", "status": "done",
+        "documents": [
+            {"id": f"d{i}", "filename": name.decode(), "status": "done", "error": None,
+             "elapsed_seconds": 0, "summary": summary}
+            for i, name in enumerate(names)
+        ],
+    }
+
+
 def results_card(page: Page):
     return page.locator("section").filter(has=page.get_by_role("tab", name="Extraction")).first
 
@@ -80,8 +98,12 @@ def main() -> None:
         browser = pw.chromium.launch(channel=args.browser)
         page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
         if not key:
-            demo = json.dumps(demo_result(), ensure_ascii=False)
-            page.route("**/api/extract", lambda route: route.fulfill(content_type="application/json", body=demo))
+            result = demo_result()
+            demo = json.dumps(result, ensure_ascii=False)
+            page.route("**/api/jobs", lambda route: route.fulfill(
+                content_type="application/json", body=json.dumps(demo_job(route.request.post_data_buffer, result))))
+            page.route("**/api/jobs/demo/documents/*",
+                       lambda route: route.fulfill(content_type="application/json", body=demo))
 
         page.goto(args.url)
         page.get_by_label("Gemini API key").fill(key or "demo-key")
@@ -100,6 +122,14 @@ def main() -> None:
         page.get_by_role("button", name="Edit values").click()
         results_card(page).screenshot(path=OUT / "editing.png")
         print("Wrote docs/screenshots/editing.png")
+
+        page.get_by_role("tab", name="Batch").click()
+        deeds = sorted((ROOT / "samples" / "dataset").glob("*.pdf"))[:5]
+        page.locator("input[type=file][multiple]").set_input_files(deeds)
+        page.get_by_role("button", name="Extract 5 deeds").click()
+        page.get_by_role("button", name="Excel (all)").wait_for(timeout=600_000)
+        results_card(page).screenshot(path=OUT / "batch.png")
+        print("Wrote docs/screenshots/batch.png")
 
         if key:
             page.get_by_role("tab", name="Model evaluation").click()
