@@ -68,7 +68,7 @@ export function SettingsCard({
             />
           </div>
           <p className="mt-1.5 text-xs text-ink-500 dark:text-stone-400">
-            Flash is faster and cheaper. Pro is more accurate.
+            Flash is the stronger model. Flash-Lite is faster and has a larger free quota.
           </p>
         </div>
       </div>

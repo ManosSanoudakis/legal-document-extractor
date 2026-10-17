@@ -7,10 +7,17 @@ the official check-digit test, so they cannot belong to a real person.
 The JSON next to each PDF holds the values the extractor should return, which
 makes field-level accuracy measurable (see accuracy.py and benchmark.py).
 
+Long deeds (--long) run to several pages and add the look-alike values real
+deeds are full of: previous owners, earlier deeds and their notaries, other
+units in the building with their own areas and ΚΑΕΚ, lawyers and engineers
+with tax IDs, the assessed value, taxes and fees. The truth JSON has the same
+shape; only the real values count, so a model that grabs a look-alike is wrong.
+
 Usage:
     python samples/make_sample_deed.py               # samples/sample_deed.pdf + .json
     python samples/make_sample_deed.py --dataset 10  # also samples/dataset/deed_01..10
     python samples/make_sample_deed.py --dataset 10 --scanned  # + scan-like copies
+    python samples/make_sample_deed.py --long 10     # also samples/dataset_long/deed_01..10
 """
 from __future__ import annotations
 
@@ -20,7 +27,7 @@ import json
 import random
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import fitz
@@ -48,6 +55,50 @@ class Person:
 
 
 @dataclass
+class Unit:
+    """Another unit in the same building (a look-alike for the deed's property)."""
+    name: str
+    floor: str
+    area: float
+    kaek: str
+    owner: str
+
+
+@dataclass
+class Transfer:
+    """An earlier transfer of the property, listed in the title history."""
+    owner: str
+    deed_number: str
+    notary: str
+    signed: date
+    price: str
+
+
+@dataclass
+class Distractors:
+    previous_owner: Person
+    history: list[Transfer]
+    lawyers: list[tuple[Person, str]]   # (lawyer, bar registry number)
+    engineer: Person
+    neighbours: list[str]
+    plot_area: float
+    units: list[Unit]
+    objective_value: int
+    tax_declaration: str
+    tax_office: str
+    declared: date
+    mortgage: int
+    certificate: str
+    energy_cert: str
+    energy_class: str
+    building_id: str
+    fees: float
+    clauses: list[str] = field(default_factory=list)
+    rules: list[str] = field(default_factory=list)
+    attachments: list[tuple[str, str, date]] = field(default_factory=list)   # (document, number, issued)
+
+
+@dataclass
 class DeedSpec:
     deed_type: str                      # "sale" | "parental_provision"
     notary: str
@@ -67,7 +118,7 @@ class DeedSpec:
     price: int | None
     representative: Person | None = None
     represents: Person | None = None
-    extra: dict = field(default_factory=dict)
+    long: Distractors | None = None     # set for long deeds only
 
     def truth(self) -> dict:
         """The values a perfect extraction would return."""
@@ -143,12 +194,26 @@ CITIES = {
     "Πάτρα": ["Δημοτική Ενότητα Ρίου", "Δημοτική Ενότητα Πατρέων"],
     "Ηράκλειο": ["Δημοτική Ενότητα Νέας Αλικαρνασσού", "Δημοτική Ενότητα Ηρακλείου"],
 }
+# City → ("in the city", "the city" as an object). Accusative, not genitive ("Αθηνών"),
+# so the notary's location reads the same as in the truth JSON.
+CITY_FORMS = {
+    "Αθήνα": ("στην Αθήνα", "την Αθήνα"),
+    "Πειραιάς": ("στον Πειραιά", "τον Πειραιά"),
+    "Θεσσαλονίκη": ("στη Θεσσαλονίκη", "τη Θεσσαλονίκη"),
+    "Πάτρα": ("στην Πάτρα", "την Πάτρα"),
+    "Ηράκλειο": ("στο Ηράκλειο", "το Ηράκλειο"),
+}
 PROPERTY_TYPES = {  # type → possible floors (None = no floor, e.g. a plot)
     "διαμέρισμα": ["1ος όροφος", "2ος όροφος", "3ος όροφος", "4ος όροφος"],
     "κατάστημα": ["ισόγειο"],
     "μονοκατοικία": [None],
     "οικόπεδο": [None],
 }
+
+
+def gendered(name: str, male: str, female: str) -> str:
+    """Pick the form that agrees with a person, judged by their first name."""
+    return female if name.split()[0] in FEMALE else male
 
 
 def fake_afm(rng: random.Random) -> str:
@@ -174,9 +239,11 @@ def random_deed(rng: random.Random) -> DeedSpec:
     area = round(rng.uniform(800, 1200) if ptype == "οικόπεδο" else rng.uniform(35, 180), 2)
     sellers = [fake_person(rng, city) for _ in range(1 if deed_type == "parental_provision" else rng.randint(1, 3))]
     buyers = [fake_person(rng, rng.choice(list(CITIES))) for _ in range(rng.randint(1, 2))]
+    first = rng.choice(FEMALE + MALE)
+    notary = f"{first} {rng.choice(SURNAMES)[first in FEMALE]}"
     spec = DeedSpec(
         deed_type=deed_type,
-        notary=f"{rng.choice(FEMALE + MALE)} {rng.choice(SURNAMES)[0]}",
+        notary=notary,
         location=city,
         registry_number=f"{rng.randint(1, 40)}.{rng.randint(0, 999):03d}",
         signed=date(rng.randint(2015, 2025), rng.randint(1, 12), rng.randint(1, 28)),
@@ -198,6 +265,292 @@ def random_deed(rng: random.Random) -> DeedSpec:
     return spec
 
 # ---------------------------------------------------------------------------
+# Long deeds: same truth, many look-alike values
+# ---------------------------------------------------------------------------
+
+TAX_OFFICES = ["Α' Αθηνών", "Ψυχικού", "Α' Πειραιά", "Δ' Θεσσαλονίκης", "Πατρών", "Α' Ηρακλείου"]
+UNIT_FLOORS = ["ισογείου", "1ου ορόφου", "2ου ορόφου", "3ου ορόφου", "4ου ορόφου", "5ου ορόφου"]
+
+# Generic standard declarations of the kind real deeds carry. Each long deed uses a random subset.
+CLAUSES = [
+    "Ο μεταβιβάζων δηλώνει υπεύθυνα, κατ' εφαρμογή των διατάξεων της κείμενης πολεοδομικής νομοθεσίας, "
+    "ότι στο μεταβιβαζόμενο ακίνητο δεν υφίστανται αυθαίρετες κατασκευές ή αυθαίρετες αλλαγές χρήσης, "
+    "ότι δεν έχει υπαχθεί σε καμία ρύθμιση νομιμοποίησης και ότι το ακίνητο είναι σύμφωνο με την "
+    "οικοδομική άδεια και τα εγκεκριμένα σχέδια. Προσαρτάται στο παρόν σχετική βεβαίωση μηχανικού, "
+    "ο οποίος βεβαιώνει ότι διενήργησε αυτοψία και ότι η βεβαίωση εκδόθηκε μετά από επιτόπιο έλεγχο.",
+    "Οι συμβαλλόμενοι δηλώνουν ότι το ακίνητο δεν βρίσκεται σε δασική ή αναδασωτέα περιοχή, σε "
+    "αρχαιολογικό χώρο ή σε ζώνη αιγιαλού και παραλίας, και ότι δεν απαιτείται καμία ειδική άδεια "
+    "ή έγκριση δημόσιας αρχής για τη μεταβίβασή του. Δηλώνουν επίσης ότι έλαβαν γνώση των διατάξεων "
+    "για τις παραμεθόριες περιοχές και ότι αυτές δεν εφαρμόζονται στο παρόν.",
+    "Ο αποκτών δηλώνει ότι επισκέφθηκε το ακίνητο, το εξέτασε προσεκτικά μαζί με τεχνικό σύμβουλο "
+    "της επιλογής του και το βρήκε της απολύτου αρεσκείας του, κατάλληλο για τη χρήση για την οποία "
+    "το προορίζει, και παραιτείται από κάθε δικαίωμα να ζητήσει μείωση του τιμήματος ή υπαναχώρηση "
+    "για πραγματικά ελαττώματα, εκτός αν αυτά αποκρύφθηκαν δολίως.",
+    "Η νομή και κατοχή του ακινήτου, μαζί με όλα τα δικαιώματα, τις αγωγές και τις ενστάσεις που "
+    "απορρέουν από την κυριότητα, μεταβιβάζονται στον αποκτώντα από σήμερα. Από την ίδια ημέρα όλα τα "
+    "τέλη, οι φόροι, οι κοινόχρηστες δαπάνες και οι λογαριασμοί κοινής ωφέλειας βαρύνουν τον αποκτώντα, "
+    "ενώ οι οφειλές μέχρι σήμερα βαρύνουν τον μεταβιβάζοντα, ο οποίος δηλώνει ότι τις έχει εξοφλήσει.",
+    "Ο μεταβιβάζων ευθύνεται για την ύπαρξη του δικαιώματος κυριότητας και για την έλλειψη νομικών "
+    "ελαττωμάτων, και υποχρεούται σε αποζημίωση του αποκτώντος σε περίπτωση αποβολής του από τρίτο "
+    "που θα προβάλει δικαίωμα επί του ακινήτου, σύμφωνα με τις διατάξεις του Αστικού Κώδικα.",
+    "Οι συμβαλλόμενοι δηλώνουν ότι έλαβαν γνώση του κανονισμού της οικοδομής και των όρων "
+    "δόμησης της περιοχής, τους αποδέχονται ανεπιφύλακτα και ότι ο αποκτών υπεισέρχεται σε όλα "
+    "τα δικαιώματα και τις υποχρεώσεις του μεταβιβάζοντος που απορρέουν από αυτούς.",
+    "Δηλώνεται ότι για το ακίνητο έχει υποβληθεί δήλωση στο Εθνικό Κτηματολόγιο, ότι τα στοιχεία "
+    "του κτηματολογικού φύλλου συμφωνούν με την περιγραφή του παρόντος, και ότι ο/η συμβολαιογράφος "
+    "θα μεριμνήσει για την καταχώριση της παρούσας πράξης στο αρμόδιο Κτηματολογικό Γραφείο.",
+    "Οι συμβαλλόμενοι δηλώνουν ότι δεν εκκρεμεί καμία δίκη, διεκδίκηση, αναγκαστική εκτέλεση ή "
+    "κατάσχεση για το ακίνητο και ότι δεν έχουν ασκηθεί αγωγές που να αφορούν την κυριότητα, τη "
+    "νομή ή τα όριά του, ούτε έχει εγγραφεί προσημείωση ή άλλο εμπράγματο βάρος.",
+    "Ο/Η συμβολαιογράφος βεβαιώνει ότι έλεγξε την ταυτότητα των συμβαλλομένων με βάση τα νόμιμα "
+    "έγγραφα που επέδειξαν, ότι αυτοί έχουν πλήρη δικαιοπρακτική ικανότητα και ότι τους ενημέρωσε "
+    "για τις φορολογικές και αστικές συνέπειες της πράξης, για τις οποίες δήλωσαν ότι έλαβαν γνώση.",
+    "Οι συμβαλλόμενοι συναινούν στην επεξεργασία των προσωπικών τους δεδομένων από τον/την "
+    "συμβολαιογράφο για τους σκοπούς της κατάρτισης, της καταχώρισης και της φύλαξης της παρούσας "
+    "πράξης, και για την υποβολή των νόμιμων δηλώσεων στις αρμόδιες φορολογικές αρχές.",
+    "Ο μεταβιβάζων δηλώνει ότι το ακίνητο δεν έχει μισθωθεί σε τρίτους, ότι δεν υφίσταται δικαίωμα "
+    "προτίμησης ή προαίρεσης υπέρ οποιουδήποτε, και ότι δεν έχει συνάψει άλλη σύμβαση, προσύμφωνο ή "
+    "υπόσχεση μεταβίβασης για το ίδιο ακίνητο.",
+    "Όλα τα έξοδα του παρόντος, δηλαδή τα δικαιώματα του/της συμβολαιογράφου, τα τέλη καταχώρισης στο "
+    "Κτηματολόγιο, οι αμοιβές των δικηγόρων και ο αναλογών φόρος, βαρύνουν τον αποκτώντα, εκτός αν "
+    "ορίζεται διαφορετικά ρητά στο παρόν.",
+]
+
+
+# Generic extracts from a building's regulations (κανονισμός οικοδομής), for apartments and shops
+RULES = [
+    "Κοινόχρηστα και κοινόκτητα μέρη της οικοδομής είναι το οικόπεδο, τα θεμέλια, οι κύριοι τοίχοι, "
+    "η είσοδος, το κλιμακοστάσιο, ο ανελκυστήρας, το δώμα, το λεβητοστάσιο και κάθε χώρος ή εγκατάσταση "
+    "που εξυπηρετεί όλους τους ιδιοκτήτες, και ανήκουν σε αυτούς κατά το ποσοστό συνιδιοκτησίας τους.",
+    "Οι κοινόχρηστες δαπάνες κατανέμονται μεταξύ των ιδιοκτητών σύμφωνα με τον πίνακα κατανομής "
+    "δαπανών που προσαρτάται στον κανονισμό, ενώ οι δαπάνες θέρμανσης κατανέμονται με βάση τις "
+    "ενδείξεις των θερμιδομετρητών κάθε ιδιοκτησίας.",
+    "Απαγορεύεται η χρήση οποιασδήποτε ιδιοκτησίας για σκοπούς που προκαλούν θόρυβο, οσμές ή "
+    "ενόχληση στους λοιπούς ιδιοκτήτες, καθώς και η τοποθέτηση επιγραφών ή κλιματιστικών μηχανημάτων "
+    "στις όψεις της οικοδομής χωρίς απόφαση της γενικής συνέλευσης.",
+    "Η γενική συνέλευση των ιδιοκτητών συνέρχεται τακτικά μία φορά τον χρόνο και έκτακτα όποτε τη "
+    "συγκαλέσει ο διαχειριστής ή ιδιοκτήτες που εκπροσωπούν τουλάχιστον το ένα πέμπτο των ψήφων, "
+    "και αποφασίζει με απλή πλειοψηφία, εκτός αν ο κανονισμός ορίζει διαφορετικά.",
+    "Κάθε ιδιοκτήτης υποχρεούται να επιτρέπει την είσοδο στην ιδιοκτησία του για την εκτέλεση "
+    "επισκευών σε κοινόχρηστες εγκαταστάσεις, με την επιφύλαξη αποκατάστασης κάθε ζημίας που θα "
+    "προκληθεί, και να διατηρεί την ιδιοκτησία του σε καλή κατάσταση.",
+    "Ο διαχειριστής εκλέγεται από τη γενική συνέλευση για θητεία ενός έτους, εκπροσωπεί τους "
+    "ιδιοκτήτες δικαστικά και εξώδικα για κάθε θέμα που αφορά τα κοινόχρηστα, εισπράττει τις "
+    "κοινόχρηστες δαπάνες και τηρεί βιβλίο εσόδων και εξόδων.",
+]
+
+ATTACHMENTS = [
+    "Πιστοποιητικό κτηματολογικής εγγραφής", "Απόσπασμα κτηματολογικού διαγράμματος",
+    "Βεβαίωση μηχανικού για τη μη ύπαρξη αυθαιρέτων", "Αποδεικτικό ενημερότητας για ΕΝΦΙΑ",
+    "Βεβαίωση του Δήμου για τη μη οφειλή ΤΑΠ", "Δήλωση φόρου και αποδεικτικό καταβολής",
+    "Αντίγραφο οικοδομικής άδειας", "Κάτοψη ορόφου θεωρημένη από μηχανικό",
+    "Πιστοποιητικό ενεργειακής απόδοσης", "Ηλεκτρονική Ταυτότητα Κτιρίου",
+    "Πιστοποιητικό βαρών", "Πιστοποιητικό μη διεκδίκησης",
+]
+
+
+def earlier(rng: random.Random, before: date, min_days: int, max_days: int) -> date:
+    return before - timedelta(days=rng.randint(min_days, max_days))
+
+
+def other_person(rng: random.Random, city: str, taken: set[str]) -> Person:
+    """A fictional person whose name is not already used in the deed."""
+    while True:
+        p = fake_person(rng, city)
+        if p.name not in taken:
+            taken.add(p.name)
+            return p
+
+
+def add_distractors(spec: DeedSpec, rng: random.Random) -> DeedSpec:
+    """Make a deed long and full of values that look like the real ones but are not."""
+    real = [*spec.sellers, *spec.buyers, *([spec.representative] if spec.representative else [])]
+    taken = {p.name for p in real}
+    city = spec.location
+    previous = other_person(rng, city, taken)
+
+    # Title history, oldest first; the last owner is the one the sellers acquired from
+    years = sorted(rng.sample(range(1978, spec.signed.year), rng.randint(3, 7)))
+    owners = [other_person(rng, city, taken).name for _ in years[:-1]] + [previous.name]
+    history = []
+    for year, owner in zip(years, owners, strict=True):
+        if year < 2002:
+            price = f"{greek_amount(rng.randrange(2_000_000, 40_000_000, 50_000), 0)} δραχμών"
+        else:
+            price = f"{greek_amount(rng.randrange(20_000, 400_000, 500))} €"
+        history.append(Transfer(
+            owner=owner,
+            deed_number=f"{rng.randint(1, 30)}.{rng.randint(0, 999):03d}/{year}",
+            notary=other_person(rng, city, taken).name.split(" του ")[0],
+            signed=date(year, rng.randint(1, 12), rng.randint(1, 28)),
+            price=price,
+        ))
+
+    # Other units in the building share the ΚΑΕΚ base and differ only in the last part
+    base, _, suffix = spec.kaek.rpartition("/")
+    units = []
+    if spec.property_type in ("διαμέρισμα", "κατάστημα"):
+        suffixes = [n for n in range(1, 25) if str(n) != suffix]
+        for i, n in enumerate(rng.sample(suffixes, rng.randint(6, 14))):
+            floor = rng.choice(UNIT_FLOORS)
+            kind = "κατάστημα" if floor == "ισογείου" else "διαμέρισμα"
+            units.append(Unit(
+                name=f"{kind} {chr(0x391 + i)}{rng.randint(1, 4)}",
+                floor=floor,
+                area=round(rng.uniform(35, 160), 2),
+                kaek=f"{base}/{n}",
+                owner=other_person(rng, city, taken).name,
+            ))
+
+    # The assessed value is always close to, but never equal to, the price
+    objective = round((spec.price or rng.randrange(40_000, 600_000, 500)) * rng.uniform(0.55, 0.95), -2)
+    spec.long = Distractors(
+        previous_owner=previous,
+        history=history,
+        lawyers=[(other_person(rng, city, taken), str(rng.randint(1000, 39999))) for _ in range(rng.randint(1, 2))],
+        engineer=other_person(rng, city, taken),
+        neighbours=[other_person(rng, city, taken).name for _ in range(rng.randint(2, 4))],
+        plot_area=round(rng.uniform(250, 900), 2),
+        units=units,
+        objective_value=int(objective),
+        tax_declaration=f"{rng.randint(100_000, 999_999)}/{spec.signed.year}",
+        tax_office=rng.choice(TAX_OFFICES),
+        declared=earlier(rng, spec.signed, 2, 20),
+        mortgage=rng.randrange(20_000, 250_000, 1_000),
+        certificate=f"{rng.randint(1000, 99999)}/{spec.signed.year}",
+        energy_cert=f"{rng.randint(100_000, 999_999)}/{spec.signed.year - rng.randint(0, 3)}",
+        energy_class=rng.choice(["Β+", "Β", "Γ", "Δ", "Ε", "Ζ"]),
+        building_id=f"{rng.randint(1000, 9999)}{rng.randint(100000, 999999)}",
+        fees=round(spec.price * 0.008 if spec.price else rng.uniform(600, 2500), 2),
+        clauses=rng.sample(CLAUSES, rng.randint(8, len(CLAUSES))),
+        rules=rng.sample(RULES, rng.randint(4, len(RULES))) if units else [],
+        attachments=[
+            (doc, f"{rng.randint(100, 99999)}/{spec.signed.year}", earlier(rng, spec.signed, 1, 60))
+            for doc in rng.sample(ATTACHMENTS, rng.randint(8, len(ATTACHMENTS)))
+        ],
+    )
+    return spec
+
+
+def fmt_date(d: date, genitive: bool = False) -> str:
+    """15η Μαρτίου 2024, or 15ης Μαρτίου 2024 after a genitive ("της ...")."""
+    return f"{d.day}{'ης' if genitive else 'η'} {GREEK_MONTHS[d.month - 1]} {d.year}"
+
+
+def long_sections(d: DeedSpec) -> dict:
+    """HTML for the extra parts of a long deed, keyed by where they go.
+
+    Names are always set off ("ιδιοκτήτης: Νικόλαος ...") so they can stay in the
+    nominative, the form the truth JSON and the extractor use.
+    """
+    x = d.long
+    lawyers = " · ".join(
+        f"<b>{p.name}</b>, δικηγόρος, με Α.Μ. Δικηγορικού Συλλόγου {am} και Α.Φ.Μ. {p.afm}"
+        for p, am in x.lawyers
+    )
+    parties = (
+        "<p>Στην κατάρτιση του παρόντος παρίστανται, σύμφωνα με τον νόμο, οι πληρεξούσιοι "
+        f"δικηγόροι των συμβαλλομένων: {lawyers}, οι οποίοι προσκόμισαν τα νόμιμα γραμμάτια "
+        "προείσπραξης αμοιβής.</p>"
+    )
+
+    street = d.property_address.split(",")[0].split(" ", 1)[1].rsplit(" ", 1)[0]  # "Οδός Ανύπαρκτης 7" → "Ανύπαρκτης"
+    road = "τη λεωφόρο" if d.property_address.startswith("Λεωφόρος") else "την οδό"
+    others = ", ".join(x.neighbours[1:]) or x.neighbours[0]
+    bounds = (
+        f"συνορεύει βόρεια με ιδιοκτησία τρίτου ({gendered(x.neighbours[0], 'ιδιοκτήτης', 'ιδιοκτήτρια')}: "
+        f"{x.neighbours[0]}), νότια με {road} "
+        f"{street} και ανατολικά και δυτικά με ιδιοκτησίες τρίτων (ιδιοκτήτες: {others})"
+    )
+    if d.property_type == "οικόπεδο":
+        building = f"<p>Το οικόπεδο {bounds}.</p>"
+    else:
+        building = (
+            f"<p>Το ακίνητο βρίσκεται σε οικόπεδο συνολικού εμβαδού {greek_amount(x.plot_area)} τ.μ., "
+            f"το οποίο {bounds}.</p>"
+        )
+    if x.units:
+        rows = "".join(
+            f"<p>— {u.name} του {u.floor}, εμβαδού {greek_amount(u.area)} τ.μ., με ΚΑΕΚ {u.kaek} "
+            f"({gendered(u.owner, 'ιδιοκτήτης', 'ιδιοκτήτρια')}: {u.owner}).</p>"
+            for u in x.units
+        )
+        building += (
+            "<p>Με την πράξη σύστασης οριζόντιας ιδιοκτησίας και τον κανονισμό της οικοδομής, "
+            "η οικοδομή διαιρέθηκε, πέρα από το ακίνητο του παρόντος, και στις εξής αυτοτελείς "
+            f"ιδιοκτησίες, οι οποίες δεν αποτελούν αντικείμενο του παρόντος:</p>{rows}"
+        )
+    rules = "".join(f"<p>{r}</p>" for r in x.rules)
+    if rules:
+        rules = "<p>Από τον κανονισμό της οικοδομής, ο οποίος δεσμεύει και τον αποκτώντα, παρατίθενται:</p>" + rules
+
+    titles = "".join(
+        f"<p>Με το υπ' αριθμ. {t.deed_number} συμβόλαιο (συμβολαιογράφος: {t.notary}), που "
+        f"συντάχθηκε την {fmt_date(t.signed)}, το ακίνητο μεταβιβάστηκε αντί τιμήματος {t.price}. "
+        f"{gendered(t.owner, 'Νέος κύριος έγινε ο', 'Νέα κυρία έγινε η')} {t.owner}, και το συμβόλαιο "
+        "μεταγράφηκε νόμιμα στα βιβλία μεταγραφών του αρμόδιου Υποθηκοφυλακείου.</p>"
+        for t in x.history
+    )
+    p = x.previous_owner
+    titles += (
+        f"<p>{gendered(p.name, 'Ο τελευταίος κύριος', 'Η τελευταία κυρία')}, <b>{p.name}</b>, "
+        f"κάτοικος {p.address}, με Α.Φ.Μ. {p.afm}, μεταβίβασε το ακίνητο "
+        + ("στον μεταβιβάζοντα του παρόντος, ο οποίος έκτοτε το νέμεται" if len(d.sellers) == 1
+           else "στους μεταβιβάζοντες του παρόντος, οι οποίοι έκτοτε το νέμονται")
+        + " συνεχώς, δημόσια και αδιατάρακτα.</p>"
+    )
+    encumbrances = (
+        f"<p>Σύμφωνα με το υπ' αριθμ. {x.certificate} πιστοποιητικό του αρμόδιου Κτηματολογικού "
+        f"Γραφείου, το ακίνητο βαρυνόταν με υποθήκη ποσού {greek_amount(x.mortgage)} € υπέρ της "
+        "Τράπεζας Δοκιμών Α.Ε., η οποία έχει εξαλειφθεί πλήρως, και σήμερα είναι ελεύθερο από κάθε "
+        "βάρος, κατάσχεση, διεκδίκηση ή δουλεία.</p>"
+    )
+
+    tax = "μεταβίβασης" if d.deed_type == "sale" else "γονικής παροχής"
+    taxes = (
+        "<p>Η αντικειμενική αξία του ακινήτου, όπως υπολογίστηκε με το σύστημα αντικειμενικού "
+        f"προσδιορισμού, ανέρχεται σε {greek_amount(x.objective_value)} €. Για την παρούσα υποβλήθηκε "
+        f"η υπ' αριθμ. {x.tax_declaration} δήλωση φόρου {tax} στη Δ.Ο.Υ. {x.tax_office} την "
+        f"{fmt_date(x.declared)}, και ο φόρος καταβλήθηκε εμπρόθεσμα, όπως αποδεικνύεται από το "
+        "προσαρτώμενο αποδεικτικό πληρωμής.</p>"
+    )
+    e = x.engineer
+    certificates = (
+        "<p>Προσαρτώνται στο παρόν: (α) πιστοποιητικό ενεργειακής απόδοσης με αριθμό "
+        f"{x.energy_cert}, κατηγορίας {x.energy_class} "
+        f"({gendered(e.name, 'ενεργειακός επιθεωρητής', 'ενεργειακή επιθεωρήτρια')}: <b>{e.name}</b>, "
+        f"με Α.Φ.Μ. {e.afm})· (β) Ηλεκτρονική Ταυτότητα Κτιρίου με αριθμό {x.building_id}, "
+        f"συνταγμένη από {gendered(e.name, 'τον ίδιο', 'την ίδια')} μηχανικό· (γ) βεβαίωση της αρμόδιας "
+        "Δ.Ο.Υ. για την καταβολή του φόρου ακίνητης περιουσίας των τελευταίων πέντε ετών· (δ) "
+        "βεβαίωση του Δήμου για τη μη οφειλή τέλους ακίνητης περιουσίας.</p>"
+    )
+    fees = (
+        f"<p>Τα δικαιώματα του/της συμβολαιογράφου για το παρόν ανέρχονται σε {greek_amount(x.fees)} € "
+        "πλέον Φ.Π.Α., και τα τέλη καταχώρισης θα καταβληθούν κατά την υποβολή της αίτησης "
+        "καταχώρισης στο Κτηματολογικό Γραφείο.</p>"
+    )
+    return {
+        "parties": parties,
+        "after_property": [
+            ("ΤΑ ΟΡΙΑ" if d.property_type == "οικόπεδο" else "Η ΟΙΚΟΔΟΜΗ ΚΑΙ ΤΟ ΟΙΚΟΠΕΔΟ", building),
+            ("ΤΙΤΛΟΙ ΚΤΗΣΗΣ", titles),
+            ("ΒΑΡΗ", encumbrances),
+            *([("Ο ΚΑΝΟΝΙΣΜΟΣ ΤΗΣ ΟΙΚΟΔΟΜΗΣ", rules)] if rules else []),
+        ],
+        "after_deal": [
+            ("ΦΟΡΟΛΟΓΙΚΑ", taxes),
+            ("ΠΙΣΤΟΠΟΙΗΤΙΚΑ", certificates),
+            ("ΔΗΛΩΣΕΙΣ ΤΩΝ ΣΥΜΒΑΛΛΟΜΕΝΩΝ", "".join(f"<p>{c}</p>" for c in x.clauses)),
+            ("ΕΞΟΔΑ", fees),
+            ("ΠΡΟΣΑΡΤΩΜΕΝΑ ΕΓΓΡΑΦΑ", "<p>Στο παρόν προσαρτώνται τα εξής έγγραφα:</p>" + "".join(
+                f"<p>{i}. {doc}, με αριθμό {number}, της {fmt_date(issued, genitive=True)}.</p>"
+                for i, (doc, number, issued) in enumerate(x.attachments, start=1)
+            )),
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
 
@@ -208,6 +561,14 @@ h1 { font-size: 14pt; text-align: center; margin-bottom: 2pt; }
 .c { text-align: center; }
 .banner { text-align: center; font-size: 9pt; color: #b00020; font-weight: bold; }
 """
+# Real deeds are typed larger and more widely spaced
+LONG_CSS = CSS + "body { font-size: 12pt; line-height: 1.75; }"
+
+
+ORDINALS = [
+    "ΠΡΩΤΟ", "ΔΕΥΤΕΡΟ", "ΤΡΙΤΟ", "ΤΕΤΑΡΤΟ", "ΠΕΜΠΤΟ", "ΕΚΤΟ", "ΕΒΔΟΜΟ", "ΟΓΔΟΟ", "ΕΝΑΤΟ", "ΔΕΚΑΤΟ",
+    "ΕΝΔΕΚΑΤΟ", "ΔΩΔΕΚΑΤΟ",
+]
 
 
 def greek_amount(value: float, decimals: int = 2) -> str:
@@ -226,50 +587,80 @@ def deed_html(d: DeedSpec) -> str:
         if d.representative and d.represents is p:
             r = d.representative
             text += (
-                f", που εκπροσωπείται στο παρόν από τον/την πληρεξούσιο <b>{r.name}</b>, "
+                f", που εκπροσωπείται στο παρόν από πληρεξούσιο: <b>{r.name}</b>, "
                 f"με Α.Φ.Μ. {r.afm} και αριθμό δελτίου ταυτότητας {r.id_doc}, δυνάμει του "
                 f"υπ' αριθμ. 678/{d.signed.year} πληρεξουσίου του Συμβολαιογράφου Δοκιμών"
             )
         return text + "."
 
+    def word(people: list[Person], male: str, female: str, plural: str) -> str:
+        """Pick the form that agrees with the people: one man, one woman, or several."""
+        return plural if len(people) > 1 else gendered(people[0].name, male, female)
+
     sale = d.deed_type == "sale"
     title = "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ" if sale else "ΣΥΜΒΟΛΑΙΟ ΓΟΝΙΚΗΣ ΠΑΡΟΧΗΣ"
-    side_a = "ως πωλητές" if sale else "ως παρέχων γονέας"
-    side_b = "ως αγοραστές" if sale else "ως αποδέκτες τέκνα"
+    if sale:
+        side_a = word(d.sellers, "ως πωλητής", "ως πωλήτρια", "ως πωλητές")
+        side_b = word(d.buyers, "ως αγοραστής", "ως αγοράστρια", "ως αγοραστές")
+        owner = word(d.sellers, "Ο πωλητής είναι κύριος", "Η πωλήτρια είναι κυρία", "Οι πωλητές είναι συγκύριοι")
+    else:
+        side_a = word(d.sellers, "ως παρέχων γονέας", "ως παρέχουσα γονέας", "ως παρέχοντες γονείς")
+        side_b = word(d.buyers, "ως τέκνο που αποδέχεται", "ως τέκνο που αποδέχεται", "ως τέκνα που αποδέχονται")
+        owner = word(d.sellers, "Ο γονέας είναι κύριος", "Η γονέας είναι κυρία", "Οι γονείς είναι συγκύριοι")
     n = iter(range(1, 20))
     sellers = "".join(f"<p>{next(n)}) {party(p)}</p>" for p in d.sellers)
     buyers = "".join(f"<p>{next(n)}) {party(p)}</p>" for p in d.buyers)
 
+    extra = long_sections(d) if d.long else {"parties": "", "after_property": [], "after_deal": []}
+    heading = iter(ORDINALS)
+
+    def sections(items: list[tuple[str, str]]) -> str:
+        # The heading goes inside the first paragraph, like the short deed's sections
+        return "".join(html.replace("<p>", f"<p><b>{next(heading)} — {title}.</b> ", 1) for title, html in items)
+
     floor = f", {d.floor}" if d.floor else ""
     prop = (
-        f"<p><b>ΠΡΩΤΟ — ΤΟ ΑΚΙΝΗΤΟ.</b> Ο πρώτος συμβαλλόμενος είναι κύριος ενός ακινήτου "
+        f"<p><b>{next(heading)} — ΤΟ ΑΚΙΝΗΤΟ.</b> {owner} ενός ακινήτου "
         f"(<b>{d.property_type}</b>){floor}, εμβαδού {greek_amount(d.area)} τετραγωνικών μέτρων (τ.μ.), "
-        f"που βρίσκεται στην {d.property_address}, στη {d.municipal_unit}, και φέρει Κωδικό Αριθμό "
+        f"που βρίσκεται στη διεύθυνση {d.property_address}, στη {d.municipal_unit}, και φέρει Κωδικό Αριθμό "
         f"Εθνικού Κτηματολογίου (ΚΑΕΚ) <b>{d.kaek}</b>. Το ακίνητο ανεγέρθηκε ή οριοθετήθηκε νόμιμα "
         f"δυνάμει της υπ' αριθμ. {d.permit} άδειας.</p>"
-    )
+    ) + sections(extra["after_property"])
     if sale:
         deal = (
-            "<p><b>ΔΕΥΤΕΡΟ — Η ΠΩΛΗΣΗ.</b> Με το παρόν οι πωλητές πωλούν και μεταβιβάζουν στους "
-            "αγοραστές την πλήρη κυριότητα του παραπάνω ακινήτου, ελεύθερου από κάθε βάρος.</p>"
-            f"<p><b>ΤΡΙΤΟ — ΤΟ ΤΙΜΗΜΑ.</b> Το συμφωνημένο τίμημα ανέρχεται στο ποσό των "
-            f"<b>{greek_amount(d.price)} €</b>, το οποίο οι πωλητές δηλώνουν ότι εισέπραξαν ολόκληρο "
-            "μέσω τραπεζικής μεταφοράς πριν από την υπογραφή του παρόντος.</p>"
+            f"<p><b>{next(heading)} — Η ΠΩΛΗΣΗ.</b> Με το παρόν "
+            + word(d.sellers, "ο πωλητής πωλεί και μεταβιβάζει", "η πωλήτρια πωλεί και μεταβιβάζει",
+                   "οι πωλητές πωλούν και μεταβιβάζουν")
+            + " " + word(d.buyers, "στον αγοραστή", "στην αγοράστρια", "στους αγοραστές")
+            + " την πλήρη κυριότητα του παραπάνω ακινήτου, ελεύθερου από κάθε βάρος.</p>"
+            f"<p><b>{next(heading)} — ΤΟ ΤΙΜΗΜΑ.</b> Το συμφωνημένο τίμημα ανέρχεται στο ποσό των "
+            f"<b>{greek_amount(d.price)} €</b>, το οποίο "
+            + word(d.sellers, "ο πωλητής δηλώνει ότι εισέπραξε", "η πωλήτρια δηλώνει ότι εισέπραξε",
+                   "οι πωλητές δηλώνουν ότι εισέπραξαν")
+            + " ολόκληρο μέσω τραπεζικής μεταφοράς πριν από την υπογραφή του παρόντος.</p>"
         )
     else:
         deal = (
-            "<p><b>ΔΕΥΤΕΡΟ — Η ΠΑΡΟΧΗ.</b> Με το παρόν ο γονέας παραχωρεί λόγω γονικής παροχής στα "
-            "τέκνα του την πλήρη κυριότητα του παραπάνω ακινήτου, χωρίς αντάλλαγμα, για τη "
-            "δημιουργία αυτοτελούς οικονομικής ζωής τους.</p>"
+            f"<p><b>{next(heading)} — Η ΠΑΡΟΧΗ.</b> Με το παρόν "
+            + word(d.sellers, "ο γονέας παραχωρεί", "η γονέας παραχωρεί", "οι γονείς παραχωρούν")
+            + " λόγω γονικής παροχής "
+            + word(d.buyers, "στο τέκνο", "στο τέκνο", "στα τέκνα")
+            + " " + word(d.sellers, "του", "της", "τους")
+            + " την πλήρη κυριότητα του παραπάνω ακινήτου, χωρίς αντάλλαγμα, για τη "
+            "δημιουργία αυτοτελούς οικονομικής ζωής.</p>"
         )
+    deal += sections(extra["after_deal"])
+    in_city, seat = CITY_FORMS[d.location]
     return f"""
 <p class="banner">ΔΕΙΓΜΑ — ΠΛΑΣΤΑ ΣΤΟΙΧΕΙΑ / SAMPLE — FICTIONAL DATA</p>
 <h1>{title}</h1>
 <p class="c">Αριθμός {d.registry_number}</p>
-<p>Στην {d.location} {when}, στο γραφείο μου, ενώπιον εμού του/της συμβολαιογράφου
-{d.location}, <b>{d.notary}</b>, εμφανίστηκαν οι παρακάτω συμβαλλόμενοι:</p>
+<p>{in_city[0].upper() + in_city[1:]} {when}, στο γραφείο μου, εγώ,
+{gendered(d.notary, "ο", "η")} συμβολαιογράφος με έδρα {seat}, <b>{d.notary}</b>, βεβαιώνω ότι
+εμφανίστηκαν ενώπιόν μου οι παρακάτω συμβαλλόμενοι:</p>
 <p><b>ΑΠΟ ΤΗ ΜΙΑ ΠΛΕΥΡΑ, {side_a}:</b></p>{sellers}
 <p><b>ΑΠΟ ΤΗΝ ΑΛΛΗ ΠΛΕΥΡΑ, {side_b}:</b></p>{buyers}
+{extra["parties"]}
 <p>Οι συμβαλλόμενοι, τους οποίους γνωρίζω προσωπικά, ζήτησαν τη σύνταξη του παρόντος,
 με το οποίο συμφώνησαν τα εξής:</p>
 {prop}
@@ -280,7 +671,7 @@ def deed_html(d: DeedSpec) -> str:
 <p>Σε πίστωση των ανωτέρω συντάχθηκε το παρόν, το οποίο αφού αναγνώστηκε καθαρά και
 μεγαλόφωνα σε όλους, βεβαιώθηκε και υπογράφεται νόμιμα.</p>
 <p class="c" style="margin-top: 24pt">ΟΙ ΣΥΜΒΑΛΛΟΜΕΝΟΙ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-Ο/Η ΣΥΜΒΟΛΑΙΟΓΡΑΦΟΣ</p>
+{gendered(d.notary, "Ο", "Η")} ΣΥΜΒΟΛΑΙΟΓΡΑΦΟΣ</p>
 <p class="c">{d.notary}</p>
 """
 
@@ -302,7 +693,7 @@ def render(spec: DeedSpec, pdf_path: Path) -> None:
         assert not afm_is_valid(p.afm), f"ΑΦΜ {p.afm} is valid — pick another"
 
     buffer = io.BytesIO()
-    story = fitz.Story(html=deed_html(spec), user_css=CSS)
+    story = fitz.Story(html=deed_html(spec), user_css=LONG_CSS if spec.long else CSS)
     writer = fitz.DocumentWriter(buffer)
     mediabox = fitz.paper_rect("a4")
     more = True
@@ -354,6 +745,8 @@ def main() -> None:
     parser.add_argument("--dataset", type=int, default=0, help="Also generate N random deeds in samples/dataset/")
     parser.add_argument("--scanned", action="store_true",
                         help="Also write scan-like, image-only copies to samples/dataset_scanned/")
+    parser.add_argument("--long", type=int, default=0,
+                        help="Also generate N long deeds full of look-alike values in samples/dataset_long/")
     parser.add_argument("--seed", type=int, default=7, help="Random seed, so the dataset is reproducible")
     args = parser.parse_args()
 
@@ -371,6 +764,13 @@ def main() -> None:
             rng = random.Random(args.seed)
             for i in range(1, args.dataset + 1):
                 scan(out / f"deed_{i:02d}.pdf", scanned / f"deed_{i:02d}.pdf", rng)
+
+    if args.long:
+        out = ROOT / "dataset_long"
+        out.mkdir(exist_ok=True)
+        rng = random.Random(args.seed + 1)  # a different set of deeds from samples/dataset
+        for i in range(1, args.long + 1):
+            render(add_distractors(random_deed(rng), rng), out / f"deed_{i:02d}.pdf")
 
 
 if __name__ == "__main__":

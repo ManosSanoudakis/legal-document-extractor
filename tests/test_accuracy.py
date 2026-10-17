@@ -45,6 +45,21 @@ def test_missing_and_extra_parties(sample_truth):
     result = score_accuracy(pred, sample_truth)
     assert sum(m["field"].startswith("sellers[1]") for m in result["mismatches"]) == 4
     assert result["extra_parties"] == 1
+    # The invented buyer is wrong in all 4 of its fields, like the missed seller
+    assert sum(m["field"].startswith("buyers[1]") for m in result["mismatches"]) == 4
+    assert result["total"] == 29 + 4
+
+
+def test_invented_representative_lowers_accuracy(sample_truth):
+    """A lawyer listed as a legal representative must cost accuracy, not just be counted."""
+    pred = copy.deepcopy(sample_truth)
+    pred["legal_representatives"].append(
+        {"full_name": "Χρήστος Δικηγόρος", "represents": None, "tax_id": "584560920", "id_document": None}
+    )
+    result = score_accuracy(pred, sample_truth)
+    assert result["correct"] == 29
+    assert result["total"] == 33
+    assert result["accuracy_pct"] < 100
 
 
 def test_empty_placeholder_parties_are_ignored(sample_truth):
@@ -57,8 +72,16 @@ def test_values_match_edge_cases():
     assert values_match("text", None, None)
     assert not values_match("text", "Αθήνα", None)
     assert not values_match("text", "Αθήνα", "Πάτρα")
-    assert not values_match("text", "Αθ", "Αθήνα")  # too short to count as a prefix
+    assert not values_match("name", "Αθ", "Αθήνα")  # too short to count as a prefix
+    assert values_match("name", "Πειραιάς", "Πειραιά")
+    assert values_match("name", "Γεώργιος Υποθετικός του Νικολάου", "Γεώργιος Υποθετικός")
+    # Only names may be shortened: an address without its city or a bare permit number is wrong
+    assert not values_match("text", "Οδός Ανύπαρκτης 16, Θεσσαλονίκη", "Οδός Ανύπαρκτης 16")
+    assert not values_match("text", "5324/1998 του Πολεοδομικού Γραφείου Δοκιμών", "5324/1998")
     assert values_match("number", 85.4, "85,40")
     assert not values_match("number", 85.4, 854)
     assert values_match("floor", "ισόγειο", "Ισόγειο")
     assert not values_match("exact", "sale", "donation")
+    assert values_match("unit", "Δημοτική Ενότητα Ζωγράφου", "Ζωγράφου")
+    assert values_match("unit", "Δημοτική Ενότητα Ζωγράφου", "Δ.Ε. Ζωγράφου")
+    assert not values_match("unit", "Δημοτική Ενότητα Ζωγράφου", "Κυψέλης")
