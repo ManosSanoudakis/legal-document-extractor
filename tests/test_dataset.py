@@ -62,3 +62,16 @@ def test_long_deeds_hold_look_alikes_but_never_a_valid_afm(pdf):
     real = {p["tax_id"] for p in truth["sellers"] + truth["buyers"] + truth["legal_representatives"]}
     assert afms > real, "expected tax IDs of people who are not parties"
     assert not any(afm_is_valid(a) for a in afms)
+
+
+@pytest.mark.parametrize("truth_path", TRUTH_FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_correct_values_are_found_in_the_text_layer(truth_path):
+    """No false alarms: the true values of every labelled deed pass the text-layer check."""
+    from extractor import pdf_page_texts
+    from validators import validate_deed
+
+    truth = json.loads(truth_path.read_text(encoding="utf-8"))
+    texts = pdf_page_texts(str(truth_path.with_suffix(".pdf")))
+    assert all(texts)
+    issues = validate_deed({**truth, "sources": []}, text=" ".join(texts))
+    assert [i for i in issues if "PDF's text" in i["message"]] == []

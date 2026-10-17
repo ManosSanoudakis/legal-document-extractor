@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from validators import digits, norm_text
+from validators import LOOKALIKES, digits, norm_text
 
 SCALAR_FIELDS: dict[str, str] = {
     "notary.name": "name",
@@ -31,7 +31,7 @@ SCALAR_FIELDS: dict[str, str] = {
     "property.floor": "floor",
     "property.area_sqm": "number",
     "property.kaek": "digits",
-    "property.building_permit": "text",
+    "property.building_permit": "permit",
     "transaction.deed_type": "exact",
     "transaction.price": "number",
     "transaction.date": "date",
@@ -42,9 +42,8 @@ REP_FIELDS = {"full_name": "name", "represents": "name", "tax_id": "digits", "id
 
 # "Δημοτική Ενότητα Ζωγράφου" and "Ζωγράφου" name the same unit
 _UNIT_LABEL = re.compile(r"^(δημοτικη ενοτητα|δ ε) ")
-
-# Greek capitals that look identical to Latin ones (ID numbers are often typed either way)
-_LOOKALIKES = str.maketrans("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", "ABEZHIKMNOPTYX")
+# "υπ' αριθμ. 1234/2005 του Πολεοδομικού Γραφείου άδειας" is the permit copied with its sentence
+_PERMIT_WORDS = re.compile(r"^(υπ αριθμ|αριθμ|αρ) | αδεια[σς]?$")  # casefold() turns final ς into σ
 
 
 def _to_number(value: object) -> float | None:
@@ -91,7 +90,7 @@ def values_match(kind: str, expected: object, got: object) -> bool:
         return str(expected) == str(got)
     if kind == "id":
         def clean(v: object) -> str:
-            return re.sub(r"\s", "", str(v)).upper().translate(_LOOKALIKES)
+            return re.sub(r"\s", "", str(v)).upper().translate(LOOKALIKES)
         return clean(expected) == clean(got)
     if kind == "floor":
         da, db = digits(expected), digits(got)
@@ -102,6 +101,8 @@ def values_match(kind: str, expected: object, got: object) -> bool:
     a, b = norm_text(expected), norm_text(got)
     if kind == "unit":
         a, b = _UNIT_LABEL.sub("", a), _UNIT_LABEL.sub("", b)
+    if kind == "permit":
+        a, b = _PERMIT_WORDS.sub("", a), _PERMIT_WORDS.sub("", b)
     if a == b:
         return True
     if kind != "name":

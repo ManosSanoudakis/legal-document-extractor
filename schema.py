@@ -34,7 +34,7 @@ class Party(BaseModel):
 
 
 class Representative(BaseModel):
-    full_name: str | None = Field(description="Full name of the attorney or legal representative")
+    full_name: str | None = Field(description="Full name of the person acting for the party (πληρεξούσιος)")
     represents: str | None = Field(description="Full name of the party this person represents")
     tax_id: str | None = Field(description="ΑΦΜ (Greek tax ID), digits only, no spaces")
     id_document: str | None = Field(description="ID card or passport number as written")
@@ -77,7 +77,9 @@ class Deed(BaseModel):
     sellers: list[Party] = Field(description="Sellers, or the parent / donor in a parental provision or donation")
     buyers: list[Party] = Field(description="Buyers, or the child / recipient in a parental provision or donation")
     legal_representatives: list[Representative] = Field(
-        description="Attorneys or representatives acting for a party. Empty list if none"
+        description="People who sign on behalf of a party under a power of attorney (πληρεξούσιος, "
+        "\"εκπροσωπείται από\"). Not the lawyers (δικηγόροι) attending the signing, the notary, engineers "
+        "or earlier owners. Empty list if every party signs in person"
     )
     property: Property
     transaction: Transaction

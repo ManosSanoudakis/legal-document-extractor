@@ -30,7 +30,7 @@ export interface ExtractionResult {
   } | null;
   transaction?: { deed_type?: string | null; price?: number | string | null; date?: string | null } | null;
   sources?: Source[] | null;
-  _meta?: { model: string; provider: string; pages: number; elapsed_seconds: number };
+  _meta?: { model: string; provider: string; pages: number; text_layer?: boolean; elapsed_seconds: number };
   _validation?: ValidationIssue[];
   _error?: string;
 }

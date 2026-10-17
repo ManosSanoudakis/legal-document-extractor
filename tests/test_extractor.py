@@ -90,3 +90,28 @@ def test_models_can_be_overridden(monkeypatch):
     finally:
         monkeypatch.delenv("GEMINI_MODELS")
         importlib.reload(extractor)
+
+
+def test_page_text_is_sent_and_checked(monkeypatch, page_images, sample_truth):
+    """A digital PDF's text goes with each page, and values missing from it are flagged."""
+    misread = {**sample_truth, "sources": []}
+    misread["property"] = {**misread["property"], "kaek": "999910000012/0/5"}  # two digits swapped
+    response = SimpleNamespace(parsed=Deed.model_validate(misread), text=None)
+    client = FakeClient(response)
+    monkeypatch.setattr(extractor.genai, "Client", lambda api_key, **kwargs: client)
+    texts = ["Σελίδα με ΚΑΕΚ 999901000012/0/5 " * 3, "Δεύτερη σελίδα με αρκετό κείμενο για να μετρήσει " * 2]
+    result = extractor.GeminiExtractor("key", "gemini-test").extract(page_images, texts)
+
+    contents = client.calls[0]["contents"]
+    assert contents[2].startswith("Κείμενο σελίδας 1") and texts[0] in contents[2]
+    assert contents[3] == "Σελίδα 2:"
+    assert result["_meta"]["text_layer"] is True
+    assert any(i["field"] == "property.kaek" and "PDF's text" in i["message"] for i in result["_validation"])
+
+
+def test_scanned_pages_have_no_text_layer(tmp_path):
+    from pathlib import Path
+
+    samples = Path(__file__).resolve().parent.parent / "samples"
+    assert all(extractor.pdf_page_texts(str(samples / "sample_deed.pdf")))
+    assert not any(extractor.pdf_page_texts(str(samples / "dataset_scanned" / "deed_01.pdf")))

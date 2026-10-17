@@ -3,8 +3,10 @@ Sanity checks on extracted deed data.
 
 The model can misread a digit or invent a value. These rules catch the cases
 that can be checked without the source document: tax-ID check digits, KAEK
-format, impossible dates and non-positive amounts. Each problem is reported,
-never silently fixed, so a person can verify it against the PDF.
+format, impossible dates and non-positive amounts. When the PDF has a text
+layer, copied values are also looked up in it, which catches a misread digit
+that still looks valid. Each problem is reported, never silently fixed, so a
+person can verify it against the PDF.
 """
 from __future__ import annotations
 
@@ -19,6 +21,19 @@ PATH_PATTERN = re.compile(r"^(\w+)(?:\[(\d+)\])?\.(\w+)$")
 # appear in the quoted source. Numbers, dates and deed type are converted.
 DIGIT_FIELDS = {"tax_id", "kaek", "registry_number"}
 COPIED_FIELDS = DIGIT_FIELDS | {"full_name", "id_document", "address", "name", "location", "municipal_unit"}
+
+# Greek capitals that look identical to Latin ones (ID numbers are often typed either way)
+LOOKALIKES = str.maketrans("ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ", "ABEZHIKMNOPTYX")
+
+# Values looked up in the PDF's text layer. Location and municipal unit are left
+# out: they are often written in another grammatical case ("στον Πειραιά").
+TEXT_CHECKED = {
+    "notary": ("name", "registry_number"),
+    "property": ("address", "kaek"),
+    "sellers": ("full_name", "tax_id", "id_document", "address"),
+    "buyers": ("full_name", "tax_id", "id_document", "address"),
+    "legal_representatives": ("full_name", "tax_id", "id_document"),
+}
 
 
 def digits(value: object) -> str:
@@ -121,8 +136,45 @@ def _check_sources(data: dict) -> list[dict]:
     return issues
 
 
-def validate_deed(data: dict, today: date | None = None) -> list[dict]:
-    """Return a list of issues found in an extracted deed. Empty means all checks passed."""
+def _number_key(value: object) -> str:
+    """Join digits split by a space or dot ("12.345" → "12345"), keep other separators ("/0/5")."""
+    return re.sub(r"(?<=\d)[\s.](?=\d)", "", str(value).strip())
+
+
+def _in_text(key: str, value: object, text: str) -> bool:
+    if key in DIGIT_FIELDS:
+        needle = _number_key(value)
+        # Whole numbers only: 123456789 must not match inside 9123456789
+        return bool(needle) and re.search(rf"(?<!\d){re.escape(needle)}(?!\d)", _number_key(text)) is not None
+    if key == "id_document":
+        def compact(v: object) -> str:
+            return re.sub(r"\s", "", str(v)).upper().translate(LOOKALIKES)
+        return compact(value) in compact(text)
+    return norm_text(value) in norm_text(text)
+
+
+def _check_in_text(data: dict, text: str) -> list[dict]:
+    """Flag copied values that appear nowhere in the PDF's text layer."""
+    issues = []
+    for section, keys in TEXT_CHECKED.items():
+        node = data.get(section)
+        entries = [(f"{section}[{i}]", p) for i, p in enumerate(node or [])] if isinstance(node, list) \
+            else [(section, node or {})]
+        for prefix, entry in entries:
+            for key in keys:
+                value = entry.get(key)
+                if value is not None and str(value).strip() and not _in_text(key, value, text):
+                    issues.append(_issue(f"{prefix}.{key}", value, "Not found in the PDF's text: check it on the page.",
+                                         "error"))
+    return issues
+
+
+def validate_deed(data: dict, today: date | None = None, text: str | None = None) -> list[dict]:
+    """Return a list of issues found in an extracted deed. Empty means all checks passed.
+
+    text is the PDF's text layer, when every page has one; copied values are then
+    also looked up in it.
+    """
     today = today or date.today()
     issues: list[dict] = []
 
@@ -153,4 +205,6 @@ def validate_deed(data: dict, today: date | None = None) -> list[dict]:
             issues.append(_issue(f"buyers[{i}].tax_id", p["tax_id"], "Same ΑΦΜ appears as a seller.", "error"))
 
     issues += _check_sources(data)
+    if text:
+        issues += _check_in_text(data, text)
     return issues

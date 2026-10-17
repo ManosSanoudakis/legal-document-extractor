@@ -211,7 +211,7 @@ export function ResultsView({
         <div className="flex flex-wrap items-center justify-between gap-3">
           {meta && (
             <p className="text-xs text-ink-500 dark:text-stone-400">
-              {meta.model} · {meta.pages} page{meta.pages === 1 ? "" : "s"} · {meta.elapsed_seconds} s
+              {meta.model} · {meta.pages} page{meta.pages === 1 ? "" : "s"}{meta.text_layer ? " · text checked" : ""} · {meta.elapsed_seconds} s
               {edited && " · edited"}
             </p>
           )}

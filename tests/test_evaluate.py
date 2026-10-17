@@ -11,9 +11,12 @@ def fake_runs(monkeypatch, sample_truth):
     """Stub the model calls: each model returns a given deed after a given time."""
     def install(outputs: dict[str, tuple[dict, float]]):
         monkeypatch.setattr(evaluate, "pdf_to_images", lambda pdf_path, output_dir: [])
+        monkeypatch.setattr(evaluate, "pdf_page_texts", lambda pdf_path: [])
         monkeypatch.setattr(
             evaluate, "_run_once",
-            lambda images, key, model: RunResult(model, {"overall_pct": 100}, outputs[model][1], raw=outputs[model][0]),
+            lambda images, texts, key, model: RunResult(
+                model, {"overall_pct": 100}, outputs[model][1], raw=outputs[model][0]
+            ),
         )
     return install
 

@@ -78,6 +78,11 @@ def test_values_match_edge_cases():
     # Only names may be shortened: an address without its city or a bare permit number is wrong
     assert not values_match("text", "Οδός Ανύπαρκτης 16, Θεσσαλονίκη", "Οδός Ανύπαρκτης 16")
     assert not values_match("text", "5324/1998 του Πολεοδομικού Γραφείου Δοκιμών", "5324/1998")
+    # A permit copied with its surrounding words is still the same permit; a bare number is not
+    permit = "8111/2001 του Πολεοδομικού Γραφείου Δοκιμών"
+    assert values_match("permit", permit, "υπ' αριθμ. 8111/2001 του Πολεοδομικού Γραφείου Δοκιμών άδειας")
+    assert not values_match("permit", permit, "υπ' αριθμ. 8111/2001")
+    assert not values_match("permit", permit, "8112/2001 του Πολεοδομικού Γραφείου Δοκιμών")
     assert values_match("number", 85.4, "85,40")
     assert not values_match("number", 85.4, 854)
     assert values_match("floor", "ισόγειο", "Ισόγειο")
