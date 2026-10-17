@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { deleteHistory, exportBatch, getHistory, listHistory } from "../api";
-import { deedData } from "../deed";
 import { deedType, price } from "../format";
 import type { HistoryItem, HistoryRecord } from "../types";
 import { ResultsView } from "./ResultsView";
@@ -55,7 +54,7 @@ export function HistoryView() {
     try {
       const records = await Promise.all(items.map((i) => getHistory(i.id)));
       await exportBatch(
-        records.map((r) => ({ name: r.filename, deed: deedData(r.edited ?? r.result) })),
+        records.map((r) => ({ name: r.filename, deed: r.edited ?? r.result.deed })),
         format,
       );
     } catch (err) {
@@ -146,7 +145,7 @@ export function HistoryView() {
           <p className="mb-4 font-semibold">{open.filename}</p>
           <ResultsView
             key={open.id}
-            result={{ ...open.result, _meta: { ...open.result._meta!, history_id: open.id } }}
+            result={open.result}
             saved={{ edited: open.edited, reviewed: open.reviewed }}
           />
         </div>

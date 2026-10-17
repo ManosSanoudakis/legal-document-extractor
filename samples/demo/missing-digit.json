@@ -1,0 +1,217 @@
+{
+  "deed": {
+    "notary": {
+      "name": "Κωνσταντίνος Παράδειγμα",
+      "location": "Πειραιάς",
+      "registry_number": "11.542"
+    },
+    "sellers": [
+      {
+        "full_name": "Ευαγγελία Δείγμα του Παναγιώτη",
+        "tax_id": "941517483",
+        "id_document": "ΑΙ 819350",
+        "address": "Οδός Φανταστικής 73, Πειραιάς"
+      }
+    ],
+    "buyers": [
+      {
+        "full_name": "Βασιλική Υποθετική του Αθανασίου",
+        "tax_id": "075901962",
+        "id_document": "ΑΧ 669082",
+        "address": "Οδός Φανταστικής 43, Πάτρα"
+      }
+    ],
+    "legal_representatives": [
+      {
+        "full_name": "Ιωάννης Υποθετικός του Παναγιώτη",
+        "represents": "Ευαγγελία Δείγμα του Παναγιώτη",
+        "tax_id": "055535722",
+        "id_document": "ΑΚ 171652"
+      }
+    ],
+    "property": {
+      "type": "κατάστημα",
+      "address": "Οδός Ανύπαρκτης 52, Πειραιάς",
+      "municipal_unit": "Καστέλλας",
+      "floor": "ισόγειο",
+      "area_sqm": 173.0,
+      "kaek": "96038500324/0/1",
+      "building_permit": "υπ' αριθμ. 8119/2010 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+    },
+    "transaction": {
+      "deed_type": "parental_provision",
+      "price": null,
+      "date": "2025-02-08"
+    },
+    "sources": [
+      {
+        "field": "notary.name",
+        "page": 1,
+        "quote": "συμβολαιογράφος με έδρα τον Πειραιά, Κωνσταντίνος Παράδειγμα"
+      },
+      {
+        "field": "notary.location",
+        "page": 1,
+        "quote": "Στον Πειραιά σήμερα, την 8η Φεβρουαρίου του έτους 2025"
+      },
+      {
+        "field": "notary.registry_number",
+        "page": 1,
+        "quote": "Αριθμός 11.542"
+      },
+      {
+        "field": "sellers[0].full_name",
+        "page": 1,
+        "quote": "1) Ευαγγελία Δείγμα του Παναγιώτη, κάτοικος Οδός Φανταστικής 73"
+      },
+      {
+        "field": "sellers[0].tax_id",
+        "page": 1,
+        "quote": "με Α.Φ.Μ. 941517483"
+      },
+      {
+        "field": "sellers[0].id_document",
+        "page": 1,
+        "quote": "αριθμό δελτίου ταυτότητας ΑΙ 819350"
+      },
+      {
+        "field": "sellers[0].address",
+        "page": 1,
+        "quote": "κάτοικος Οδός Φανταστικής 73, Πειραιάς"
+      },
+      {
+        "field": "legal_representatives[0].full_name",
+        "page": 1,
+        "quote": "πληρεξούσιο: Ιωάννης Υποθετικός του Παναγιώτη"
+      },
+      {
+        "field": "legal_representatives[0].represents",
+        "page": 1,
+        "quote": "1) Ευαγγελία Δείγμα του Παναγιώτη... που εκπροσωπείται στο παρόν από πληρεξούσιο"
+      },
+      {
+        "field": "legal_representatives[0].tax_id",
+        "page": 1,
+        "quote": "με Α.Φ.Μ. 055535722"
+      },
+      {
+        "field": "legal_representatives[0].id_document",
+        "page": 1,
+        "quote": "αριθμό δελτίου ταυτότητας ΑΚ 171652"
+      },
+      {
+        "field": "buyers[0].full_name",
+        "page": 1,
+        "quote": "2) Βασιλική Υποθετική του Αθανασίου, κάτοικος Οδός Φανταστικής 43"
+      },
+      {
+        "field": "buyers[0].tax_id",
+        "page": 1,
+        "quote": "με Α.Φ.Μ. 075901962"
+      },
+      {
+        "field": "buyers[0].id_document",
+        "page": 1,
+        "quote": "αριθμό δελτίου ταυτότητας ΑΧ 669082"
+      },
+      {
+        "field": "buyers[0].address",
+        "page": 1,
+        "quote": "κάτοικος Οδός Φανταστικής 43, Πάτρα"
+      },
+      {
+        "field": "property.type",
+        "page": 1,
+        "quote": "Η γονέας είναι κυρία ενός ακινήτου (κατάστημα)"
+      },
+      {
+        "field": "property.address",
+        "page": 1,
+        "quote": "βρίσκεται στη διεύθυνση Οδός Ανύπαρκτης 52, Πειραιάς"
+      },
+      {
+        "field": "property.municipal_unit",
+        "page": 1,
+        "quote": "στη Δημοτική Ενότητα Καστέλλας"
+      },
+      {
+        "field": "property.floor",
+        "page": 1,
+        "quote": "ακινήτου (κατάστημα), ισόγειο"
+      },
+      {
+        "field": "property.area_sqm",
+        "page": 1,
+        "quote": "εμβαδού 173,00 τετραγωνικών μέτρων (τ.μ.)"
+      },
+      {
+        "field": "property.kaek",
+        "page": 1,
+        "quote": "φέρει Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 96038500324/0/1"
+      },
+      {
+        "field": "property.building_permit",
+        "page": 1,
+        "quote": "δυνάμει της υπ' αριθμ. 8119/2010 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+      },
+      {
+        "field": "transaction.deed_type",
+        "page": 1,
+        "quote": "ΣΥΜΒΟΛΑΙΟ ΓΟΝΙΚΗΣ ΠΑΡΟΧΗΣ"
+      },
+      {
+        "field": "transaction.date",
+        "page": 1,
+        "quote": "Στον Πειραιά σήμερα, την 8η Φεβρουαρίου του έτους 2025"
+      }
+    ]
+  },
+  "meta": {
+    "model": "gemini-3.8-flash",
+    "provider": "gemini",
+    "pages": 7,
+    "text_layer": true,
+    "elapsed_seconds": 28.89,
+    "history_id": null,
+    "note": "A saved answer from a benchmark run (gemini-3.8-flash, page images only); the checks were run again with the current code. The tax IDs in these fictional deeds are deliberately invalid, so the check-digit test flags every one of them."
+  },
+  "validation": [
+    {
+      "field": "sellers[0].tax_id",
+      "value": "941517483",
+      "message": "ΑΦΜ fails the official check-digit test.",
+      "severity": "error"
+    },
+    {
+      "field": "buyers[0].tax_id",
+      "value": "075901962",
+      "message": "ΑΦΜ fails the official check-digit test.",
+      "severity": "error"
+    },
+    {
+      "field": "legal_representatives[0].tax_id",
+      "value": "055535722",
+      "message": "ΑΦΜ fails the official check-digit test.",
+      "severity": "error"
+    },
+    {
+      "field": "property.kaek",
+      "value": "96038500324/0/1",
+      "message": "ΚΑΕΚ should be 12 digits, optionally followed by /building/unit.",
+      "severity": "warning"
+    },
+    {
+      "field": "notary.location",
+      "value": "Πειραιάς",
+      "message": "Value does not appear in the quoted source text.",
+      "severity": "warning"
+    },
+    {
+      "field": "property.kaek",
+      "value": "96038500324/0/1",
+      "message": "Not found in the PDF's text: check it on the page.",
+      "severity": "error"
+    }
+  ],
+  "error": null
+}

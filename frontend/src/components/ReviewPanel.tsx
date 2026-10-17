@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { isNumberField, parseNumber, tryGetPath } from "../deed";
 import { fieldLabel, text } from "../format";
-import type { ExtractionResult, RecheckAnswer, ValidationIssue } from "../types";
+import type { Deed, RecheckAnswer, ValidationIssue } from "../types";
 import { Alert, Badge, Button, Icon, Spinner, cx } from "./ui";
 
 /** Paths of single fields ("property.kaek", "sellers[0].tax_id"), the only ones a second look can read. */
@@ -27,13 +27,13 @@ export function ReviewPanel({
   onUse,
   onRecheck,
 }: {
-  deed: ExtractionResult;
+  deed: Deed;
   issues: ValidationIssue[] | undefined;
   checking: boolean;
   reviewed: Set<string>;
   onToggleReviewed: (field: string) => void;
   onUse: (field: string, value: unknown) => void;
-  /** Absent when the PDF is not at hand (e.g. a result opened from history). */
+  /** Absent when the PDF or an API key is not at hand (e.g. a result opened from history). */
   onRecheck?: (fields: string[]) => Promise<RecheckAnswer[]>;
 }) {
   const [answers, setAnswers] = useState<Record<string, RecheckAnswer>>({});

@@ -3,7 +3,7 @@ from datetime import date
 
 from conftest import make_valid_afm
 
-from validators import afm_is_valid, get_path, validate_deed
+from deed_extractor.validators import afm_is_valid, get_path, validate_deed
 
 TODAY = date(2026, 10, 15)
 

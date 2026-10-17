@@ -5,9 +5,9 @@ from pathlib import Path
 import fitz
 import pytest
 
-from accuracy import score_accuracy
-from schema import Deed
-from validators import afm_is_valid
+from deed_extractor.accuracy import score_accuracy
+from deed_extractor.schema import Deed
+from deed_extractor.validators import afm_is_valid
 
 SAMPLES = Path(__file__).resolve().parent.parent / "samples"
 TRUTH_FILES = [
@@ -75,8 +75,8 @@ def test_long_deeds_hold_look_alikes_but_never_a_valid_afm(pdf):
 @pytest.mark.parametrize("truth_path", TRUTH_FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_correct_values_are_found_in_the_text_layer(truth_path):
     """No false alarms: the true values of every labelled deed pass the text-layer check."""
-    from extractor import pdf_page_texts
-    from validators import validate_deed
+    from deed_extractor.extractor import pdf_page_texts
+    from deed_extractor.validators import validate_deed
 
     truth = json.loads(truth_path.read_text(encoding="utf-8"))
     texts = pdf_page_texts(str(truth_path.with_suffix(".pdf")))

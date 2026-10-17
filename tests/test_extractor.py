@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-import extractor
-from schema import Deed
+from deed_extractor import extractor
+from deed_extractor.schema import Deed
 
 
 @pytest.fixture
@@ -50,9 +50,9 @@ def test_requests_structured_output(monkeypatch, page_images, sample_truth):
     assert call["contents"][0] == "Σελίδα 1:" and call["contents"][2] == "Σελίδα 2:"
     assert len(call["contents"]) == 5
 
-    assert result["transaction"]["deed_type"] == "sale"
-    assert result["_meta"]["pages"] == 2
-    assert any(i["field"].endswith("tax_id") for i in result["_validation"])  # sample ΑΦΜ are invalid
+    assert result.deed["transaction"]["deed_type"] == "sale"
+    assert result.meta.pages == 2 and result.meta.model == "gemini-test"
+    assert any(i.field.endswith("tax_id") for i in result.validation)  # sample ΑΦΜ are invalid
 
 
 def test_client_retries_busy_and_server_errors():
@@ -64,21 +64,21 @@ def test_client_retries_busy_and_server_errors():
 def test_falls_back_to_text_when_parsed_missing(monkeypatch, page_images, sample_truth):
     response = SimpleNamespace(parsed=None, text=json.dumps(sample_truth, ensure_ascii=False))
     result, _ = run_extract(monkeypatch, page_images, response)
-    assert result["notary"]["name"] == sample_truth["notary"]["name"]
+    assert result.deed["notary"]["name"] == sample_truth["notary"]["name"]
 
 
 def test_off_schema_json_is_kept(monkeypatch, page_images):
     response = SimpleNamespace(parsed=None, text='```json\n{"notary": {"name": "X"}}\n```')
     result, _ = run_extract(monkeypatch, page_images, response)
-    assert result["notary"] == {"name": "X"}
-    assert "_error" not in result
+    assert result.deed["notary"] == {"name": "X"}
+    assert result.error is None
 
 
 def test_unparseable_response_returns_empty_deed(monkeypatch, page_images):
     response = SimpleNamespace(parsed=None, text=None)  # e.g. hit the token cap
     result, _ = run_extract(monkeypatch, page_images, response)
-    assert "_error" in result
-    assert result["sellers"] == [] and result["property"]["kaek"] is None
+    assert result.error
+    assert result.deed["sellers"] == [] and result.deed["property"]["kaek"] is None
 
 
 def test_models_can_be_overridden(monkeypatch):
@@ -105,8 +105,8 @@ def test_page_text_is_sent_and_checked(monkeypatch, page_images, sample_truth):
     contents = client.calls[0]["contents"]
     assert contents[2].startswith("Κείμενο σελίδας 1") and texts[0] in contents[2]
     assert contents[3] == "Σελίδα 2:"
-    assert result["_meta"]["text_layer"] is True
-    assert any(i["field"] == "property.kaek" and "PDF's text" in i["message"] for i in result["_validation"])
+    assert result.meta.text_layer is True
+    assert any(i.field == "property.kaek" and "PDF's text" in i.message for i in result.validation)
 
 
 def test_scanned_pages_have_no_text_layer(tmp_path):
@@ -121,7 +121,7 @@ def test_recheck_reads_flagged_fields_again(monkeypatch, sample_truth):
     """The second reading sees only the cited pages, never the suspect value, and is compared with it."""
     from pathlib import Path
 
-    from schema import Recheck
+    from deed_extractor.schema import Recheck
 
     sample = str(Path(__file__).resolve().parent.parent / "samples" / "sample_deed.pdf")
     deed = {**sample_truth, "sources": [{"field": "property.kaek", "page": 1, "quote": "..."}]}
@@ -139,11 +139,11 @@ def test_recheck_reads_flagged_fields_again(monkeypatch, sample_truth):
     prompt = client.calls[0]["contents"][-1]
     assert "property.kaek" in prompt and "Πωλητής 2 (Μαρία Υποθετική του Ιωάννη)" in prompt
     assert "999910000012" not in prompt  # the suspect value is not shown
-    assert result["_meta"]["pages"] == [1]
-    by_field = {a["field"]: a for a in result["answers"]}
+    assert result.pages == [1]
+    by_field = {a.field: a for a in result.answers}
     assert set(by_field) == {"property.kaek", "sellers[1].tax_id"}  # unasked fields are dropped
-    assert by_field["property.kaek"]["agrees"] is False and by_field["property.kaek"]["found_in_text"] is True
-    assert by_field["sellers[1].tax_id"]["agrees"] is True
+    assert by_field["property.kaek"].agrees is False and by_field["property.kaek"].found_in_text is True
+    assert by_field["sellers[1].tax_id"].agrees is True
 
 
 def test_recheck_rejects_unknown_fields(sample_truth):

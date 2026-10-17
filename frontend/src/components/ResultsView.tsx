@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { exportDeed, saveHistory, validate } from "../api";
-import { deedData, getPath, parseNumber, setPath, tryGetPath } from "../deed";
+import { getPath, parseNumber, setPath, tryGetPath } from "../deed";
 import { area, DEED_TYPES, deedType, downloadJson, fieldLabel, price, text } from "../format";
-import type { ExtractionResult, RecheckAnswer, Source, ValidationIssue } from "../types";
+import type { Deed, ExtractionResult, RecheckAnswer, Source, ValidationIssue } from "../types";
 import { ReviewPanel } from "./ReviewPanel";
 import { Alert, Button, Cell, Empty, FieldGrid, Icon, SectionTitle, Stat, Table, Tabs, cx } from "./ui";
 
@@ -11,7 +11,7 @@ type Kind = "text" | "number" | "deedType";
 
 /** Shared by every value on the page: current data, edit mode, sources and failed checks. */
 interface DeedContextValue {
-  deed: ExtractionResult;
+  deed: Deed;
   editing: boolean;
   update: (path: string, value: unknown) => void;
   sourceFor: (path: string) => Source | undefined;
@@ -128,22 +128,20 @@ export function ResultsView({
   onReviewedChange,
   saved,
 }: {
-  /** The model's answer. With _meta.history_id, edits and checked fields are saved to history. */
+  /** The model's answer. With meta.history_id, edits and checked fields are saved to history. */
   result: ExtractionResult;
   onShowPage?: (page: number) => void;
-  onRecheck?: (deed: ExtractionResult, fields: string[]) => Promise<RecheckAnswer[]>;
+  onRecheck?: (deed: Deed, fields: string[]) => Promise<RecheckAnswer[]>;
   /** Told about every edit (and undo), with the deed as the user now sees it. */
-  onChange?: (deed: ExtractionResult) => void;
+  onChange?: (deed: Deed) => void;
   /** Told whenever the set of fields ticked as checked changes. */
   onReviewedChange?: (fields: string[]) => void;
   /** Corrections and checked fields from an earlier session (history). */
-  saved?: { edited: ExtractionResult | null; reviewed: string[] };
+  saved?: { edited: Deed | null; reviewed: string[] };
 }) {
   const [tab, setTab] = useState<Tab>("parties");
-  const [deed, setDeed] = useState<ExtractionResult>(
-    saved?.edited ? { ...saved.edited, _meta: result._meta, _validation: result._validation } : result,
-  );
-  const [issues, setIssues] = useState<ValidationIssue[] | undefined>(result._validation);
+  const [deed, setDeed] = useState<Deed>(saved?.edited ?? result.deed);
+  const [issues, setIssues] = useState<ValidationIssue[]>(result.validation);
   const [editing, setEditing] = useState(false);
   const [edited, setEdited] = useState(Boolean(saved?.edited));
   const [checking, setChecking] = useState(false);
@@ -151,7 +149,7 @@ export function ResultsView({
   const [reviewed, setReviewed] = useState<Set<string>>(new Set(saved?.reviewed ?? []));
   const [saveState, setSaveState] = useState<"saving" | "saved" | "error" | null>(null);
   const touched = useRef(false); // nothing to save until the user changes something
-  const historyId = result._meta?.history_id;
+  const historyId = result.meta.history_id;
 
   useEffect(() => {
     if (touched.current) onReviewedChange?.([...reviewed]);
@@ -162,7 +160,7 @@ export function ResultsView({
     if (!historyId || !touched.current) return;
     setSaveState("saving");
     const timer = setTimeout(() => {
-      saveHistory(historyId, edited ? deedData(deed) : null, [...reviewed])
+      saveHistory(historyId, edited ? deed : null, [...reviewed])
         .then(() => setSaveState("saved"))
         .catch(() => setSaveState("error"));
     }, 800);
@@ -175,10 +173,10 @@ export function ResultsView({
     setChecking(true);
     const timer = setTimeout(() => {
       // Text-layer flags stay on fields the user has not changed
-      const textFlags = (result._validation ?? []).filter(
-        (i) => i.message.includes(TEXT_CHECK) && text(tryGetPath(deed, i.field)) === text(tryGetPath(result, i.field)),
+      const textFlags = result.validation.filter(
+        (i) => i.message.includes(TEXT_CHECK) && text(tryGetPath(deed, i.field)) === text(tryGetPath(result.deed, i.field)),
       );
-      validate(deedData(deed))
+      validate(deed)
         .then((fresh) => setIssues([...fresh, ...textFlags]))
         .catch(() => undefined)
         .finally(() => setChecking(false));
@@ -196,9 +194,9 @@ export function ResultsView({
 
   function reset() {
     touched.current = true;
-    onChange?.(result);
-    setDeed(result);
-    setIssues(result._validation);
+    onChange?.(result.deed);
+    setDeed(result.deed);
+    setIssues(result.validation);
     setEdited(false);
     setEditing(false);
     setReviewed(new Set());
@@ -217,7 +215,7 @@ export function ResultsView({
   async function download(format: "xlsx" | "csv") {
     setExportError(null);
     try {
-      await exportDeed(deedData(deed), format);
+      await exportDeed(deed, format);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
     }
@@ -229,7 +227,7 @@ export function ResultsView({
     editing,
     update,
     sourceFor: (path) => sources.find((s) => s.field === path),
-    issueFor: (path) => issues?.find((i) => i.field === path),
+    issueFor: (path) => issues.find((i) => i.field === path),
     onShowPage,
   };
   const prop = deed.property ?? {};
@@ -237,17 +235,18 @@ export function ResultsView({
   const sellers = deed.sellers ?? [];
   const buyers = deed.buyers ?? [];
   const reps = deed.legal_representatives ?? [];
-  const meta = result._meta;
-  const current = { ...deedData(deed), _validation: issues, _meta: meta };
+  const meta = result.meta;
+  const current: ExtractionResult = { ...result, deed, validation: issues };
 
   return (
     <DeedContext.Provider value={ctx}>
       <div className="space-y-5">
-        {result._error && (
+        {result.error && (
           <Alert tone="warning">
-            The model's response was not valid JSON, so the fields are empty. Details: {result._error}
+            The model's response was not valid JSON, so the fields are empty. Details: {result.error}
           </Alert>
         )}
+        {meta.note && <Alert tone="info">{meta.note}</Alert>}
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Stat label="Deed type" value={deedType(txn.deed_type)} />
@@ -265,19 +264,17 @@ export function ResultsView({
             update(field, value);
             setReviewed((prev) => new Set(prev).add(field));
           }}
-          onRecheck={onRecheck && ((fields) => onRecheck(deedData(deed), fields))}
+          onRecheck={onRecheck && ((fields) => onRecheck(deed, fields))}
         />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {meta && (
-            <p className="text-xs text-ink-500 dark:text-stone-400">
-              {meta.model} · {meta.pages} page{meta.pages === 1 ? "" : "s"}{meta.text_layer ? " · text checked" : ""} · {meta.elapsed_seconds} s
-              {edited && " · edited"}
-              {saveState === "saving" && " · saving…"}
-              {saveState === "saved" && " · saved to history"}
-              {saveState === "error" && " · could not save to history"}
-            </p>
-          )}
+          <p className="text-xs text-ink-500 dark:text-stone-400">
+            {meta.model} · {meta.pages} page{meta.pages === 1 ? "" : "s"}{meta.text_layer ? " · text checked" : ""} · {meta.elapsed_seconds} s
+            {edited && " · edited"}
+            {saveState === "saving" && " · saving…"}
+            {saveState === "saved" && " · saved to history"}
+            {saveState === "error" && " · could not save to history"}
+          </p>
           <div className="flex flex-wrap gap-2">
             {edited && (
               <Button variant="secondary" onClick={reset}>

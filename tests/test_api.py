@@ -1,7 +1,12 @@
+import json
+import time
+
 import pytest
 from fastapi.testclient import TestClient
+from google.genai import errors as genai_errors
 
-import api
+from deed_extractor import api
+from deed_extractor.schema import ExtractionResult
 
 KEY = {"X-Gemini-Key": "test-key"}
 
@@ -17,46 +22,131 @@ def test_config(client):
     assert body["sample_available"] is True
 
 
-def test_extract_requires_key(client):
-    response = client.post("/api/extract", data={"use_sample": "true"})
-    assert response.status_code == 401
+def finish(client, response) -> dict:
+    """Wait for a job started by response to end, and return its final progress."""
+    assert response.status_code == 202, response.text
+    job = response.json()
+    for _ in range(250):
+        job = client.get(f"/api/jobs/{job['id']}").json()
+        if job["status"] == "done":
+            return job
+        time.sleep(0.02)
+    raise AssertionError("job did not finish")
 
 
-def test_extract_rejects_non_pdf(client):
-    response = client.post("/api/extract", headers=KEY, files={"file": ("a.pdf", b"hello", "application/pdf")})
+def result_of(client, job: dict, i: int = 0) -> dict:
+    return client.get(f"/api/jobs/{job['id']}/documents/{job['documents'][i]['id']}").json()
+
+
+def extraction(deed: dict, issues: list | None = None) -> ExtractionResult:
+    return ExtractionResult(deed=deed, meta={"model": "m"}, validation=issues or [])
+
+
+def test_jobs_require_a_key(client):
+    for task in ("extract", "evaluate", "recheck"):
+        assert client.post("/api/jobs", data={"use_sample": "true", "task": task}).status_code == 401
+
+
+def test_jobs_reject_non_pdf_and_unknown_model(client):
+    response = client.post("/api/jobs", headers=KEY, files=[("files", ("a.pdf", b"hello", "application/pdf"))])
     assert response.status_code == 415
-
-
-def test_extract_rejects_unknown_model(client):
-    response = client.post("/api/extract", headers=KEY, data={"use_sample": "true", "model": "gpt-4"})
+    response = client.post("/api/jobs", headers=KEY, data={"use_sample": "true", "model": "gpt-4"})
     assert response.status_code == 400
+    assert client.post("/api/jobs", headers=KEY, data={"task": "summarise"}).status_code == 422
 
 
-def test_extract_sample(client, monkeypatch):
+def test_extract_sample(client, monkeypatch, sample_truth):
     seen = {}
 
-    def fake_pipeline(pdf_path, api_key, model_name):
+    def fake_pipeline(pdf_path, api_key, model_name, on_stage=None):
         seen.update(api_key=api_key, model=model_name)
-        return {"notary": {"name": "Test"}}
+        on_stage("extracting")
+        return extraction(sample_truth)
 
     monkeypatch.setattr(api, "run_pipeline", fake_pipeline)
-    response = client.post("/api/extract", headers=KEY, data={"use_sample": "true"})
-    assert response.status_code == 200
-    assert response.json() == {"notary": {"name": "Test"}}
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={"use_sample": "true"}))
+    assert job["kind"] == "extract" and job["documents"][0]["status"] == "done"
+    assert result_of(client, job)["deed"] == sample_truth
     assert seen == {"api_key": "test-key", "model": api.GeminiExtractor.MODELS[0]}
+
+
+def fake_evaluation(seen: dict):
+    def run(pdf_path, api_key, truth=None, on_stage=None, raise_if_all_failed=False):
+        seen.update(truth=truth, raises=raise_if_all_failed)
+        return {"models": [{"model": "m", "error": None}]}
+    return run
 
 
 def test_evaluate_sample_uses_ground_truth(client, monkeypatch, sample_truth):
     seen = {}
+    monkeypatch.setattr(api, "run_evaluation", fake_evaluation(seen))
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={"use_sample": "true", "task": "evaluate"}))
+    assert seen == {"truth": sample_truth, "raises": True}
+    assert job["kind"] == "evaluate" and "history_id" not in job["documents"][0]  # evaluations are not saved
+    assert result_of(client, job)["pdf"] == "sample_deed.pdf"
 
-    def fake_evaluation(pdf_path, api_key, truth=None):
-        seen["truth"] = truth
-        return {"models": [{"model": "m", "error": None}]}
 
-    monkeypatch.setattr(api, "run_evaluation", fake_evaluation)
-    response = client.post("/api/evaluate", headers=KEY, data={"use_sample": "true"})
-    assert response.status_code == 200
-    assert seen["truth"] == sample_truth
+def test_evaluate_upload_has_no_ground_truth(client, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(api, "run_evaluation", fake_evaluation(seen))
+    pdf = api.SAMPLE_PDF.read_bytes()
+    files = [("files", ("mine.pdf", pdf, "application/pdf"))]
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={"task": "evaluate"}, files=files))
+    assert seen["truth"] is None
+    assert result_of(client, job)["pdf"] == "mine.pdf"
+    two = files + [("files", ("other.pdf", pdf, "application/pdf"))]
+    assert client.post("/api/jobs", headers=KEY, data={"task": "evaluate"}, files=two).status_code == 413
+
+
+def test_evaluate_with_a_rejected_key_fails_the_job(client, monkeypatch):
+    def rejected(**kwargs):
+        raise genai_errors.APIError(400, {"error": {"message": "API key not valid. Please pass a valid API key."}})
+
+    monkeypatch.setattr(api, "run_evaluation", rejected)
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={"use_sample": "true", "task": "evaluate"}))
+    assert job["documents"][0]["error"] == "Gemini rejected the API key."
+
+
+def test_recheck_validates_its_input(client, sample_truth):
+    def post(**data):
+        return client.post("/api/jobs", headers=KEY, data={"use_sample": "true", "task": "recheck", **data})
+
+    assert post(deed="not json", fields="[]").status_code == 422
+    assert post(deed=json.dumps(sample_truth), fields="[]").status_code == 422
+    assert post(deed=json.dumps(sample_truth), fields=json.dumps(["property.colour"])).status_code == 422
+
+
+def test_recheck_returns_answers(client, monkeypatch, sample_truth):
+    def fake(pdf_path, api_key, deed, fields, model_name, on_stage=None):
+        return {"answers": [{"field": fields[0], "value": "x", "agrees": False}]}
+
+    monkeypatch.setattr(api, "run_recheck", fake)
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={
+        "use_sample": "true", "task": "recheck",
+        "deed": json.dumps(sample_truth), "fields": json.dumps(["property.kaek"]),
+    }))
+    assert job["kind"] == "recheck"
+    assert result_of(client, job)["answers"][0]["field"] == "property.kaek"
+
+
+def test_demo_deeds_need_no_key(client):
+    demos = client.get("/api/config").json()["demos"]
+    assert demos and all({"id", "title", "description"} <= set(d) for d in demos)
+    result = client.get(f"/api/demo/{demos[0]['id']}").json()
+    assert result["deed"]["sellers"] and result["meta"]["model"] and result["meta"]["note"]
+    pdf = client.get(f"/api/demo/{demos[0]['id']}/pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    assert client.get("/api/demo/nope").status_code == 404
+    assert client.get("/api/demo/..%2Fsample_deed/pdf").status_code == 404
+
+
+def test_demo_deeds_can_be_evaluated_with_their_answers(client, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(api, "run_evaluation", fake_evaluation(seen))
+    demo_id = client.get("/api/config").json()["demos"][0]["id"]
+    finish(client, client.post("/api/jobs", headers=KEY, data={"demo": demo_id, "task": "evaluate"}))
+    assert seen["truth"]["sellers"]
+    assert client.post("/api/jobs", headers=KEY, data={"demo": "nope"}).status_code == 404
 
 
 def test_validate_edited_deed(client, sample_truth):
@@ -84,70 +174,18 @@ def test_export_xlsx_and_csv(client, sample_truth):
     assert client.post("/api/export?format=pdf", json=sample_truth).status_code == 422
 
 
-def test_evaluate_upload_has_no_ground_truth(client, monkeypatch):
-    seen = {}
-
-    def fake_evaluation(pdf_path, api_key, truth=None):
-        seen["truth"] = truth
-        return {"models": []}
-
-    monkeypatch.setattr(api, "run_evaluation", fake_evaluation)
-    pdf = api.SAMPLE_PDF.read_bytes()
-    response = client.post("/api/evaluate", headers=KEY, files={"file": ("mine.pdf", pdf, "application/pdf")})
-    assert response.status_code == 200
-    assert seen["truth"] is None
-    assert response.json()["pdf"] == "mine.pdf"
-
-
-def test_recheck_validates_its_input(client, sample_truth):
-    import json
-
-    def post(**data):
-        return client.post("/api/recheck", headers=KEY, data={"use_sample": "true", **data})
-
-    assert post(deed="not json", fields="[]").status_code == 422
-    assert post(deed=json.dumps(sample_truth), fields="[]").status_code == 422
-    assert post(deed=json.dumps(sample_truth), fields=json.dumps(["property.colour"])).status_code == 422
-    assert client.post("/api/recheck", data={"use_sample": "true"}).status_code == 401
-
-
-def test_recheck_returns_answers(client, monkeypatch, sample_truth):
-    import json
-
-    def fake(pdf_path, api_key, deed, fields, model_name):
-        return {"answers": [{"field": fields[0], "value": "x", "agrees": False}], "_meta": {}}
-
-    monkeypatch.setattr(api, "run_recheck", fake)
-    response = client.post("/api/recheck", headers=KEY, data={
-        "use_sample": "true", "deed": json.dumps(sample_truth), "fields": json.dumps(["property.kaek"]),
-    })
-    assert response.status_code == 200
-    assert response.json()["answers"][0]["field"] == "property.kaek"
-
-
 def test_batch_job_end_to_end(client, monkeypatch, sample_truth):
-    import time
-
     def fake_pipeline(pdf_path, api_key, model_name, on_stage=None):
         on_stage("reading")
-        return {**sample_truth, "_validation": []}
+        return extraction(sample_truth)
 
     monkeypatch.setattr(api, "run_pipeline", fake_pipeline)
     pdf = api.SAMPLE_PDF.read_bytes()
     files = [("files", ("one.pdf", pdf, "application/pdf")), ("files", ("two.pdf", pdf, "application/pdf"))]
-    response = client.post("/api/jobs", headers=KEY, files=files)
-    assert response.status_code == 202
-    job_id = response.json()["id"]
-
-    for _ in range(250):
-        job = client.get(f"/api/jobs/{job_id}").json()
-        if job["status"] == "done":
-            break
-        time.sleep(0.02)
+    job = finish(client, client.post("/api/jobs", headers=KEY, files=files))
     assert [d["filename"] for d in job["documents"]] == ["one.pdf", "two.pdf"]
     assert all(d["status"] == "done" for d in job["documents"])
-    result = client.get(f"/api/jobs/{job_id}/documents/{job['documents'][0]['id']}").json()
-    assert result["notary"] == sample_truth["notary"]
+    assert result_of(client, job)["deed"]["notary"] == sample_truth["notary"]
     assert client.get("/api/jobs/nope").status_code == 404
 
 
@@ -178,24 +216,16 @@ def test_batch_export(client, sample_truth):
 
 
 def test_finished_jobs_go_to_history_without_the_pdf(client, monkeypatch, sample_truth):
-    import time
-
-    monkeypatch.setattr(api, "run_pipeline", lambda pdf_path, api_key, model_name, on_stage=None: {
-        **sample_truth, "_validation": [{"field": "property.kaek", "severity": "warning"}], "_meta": {},
-    })
-    job = client.post("/api/jobs", headers=KEY, data={"use_sample": "true"}).json()
-    for _ in range(250):
-        job = client.get(f"/api/jobs/{job['id']}").json()
-        if job["status"] == "done":
-            break
-        time.sleep(0.02)
+    issues = [{"field": "property.kaek", "message": "x", "severity": "warning"}]
+    monkeypatch.setattr(api, "run_pipeline", lambda pdf_path, api_key, model_name, on_stage=None:
+                        extraction(sample_truth, issues))
+    job = finish(client, client.post("/api/jobs", headers=KEY, data={"use_sample": "true"}))
     [doc] = job["documents"]
     history_id = doc["history_id"]
-    result = client.get(f"/api/jobs/{job['id']}/documents/{doc['id']}").json()
-    assert result["_meta"]["history_id"] == history_id  # so the UI can save edits
+    assert result_of(client, job)["meta"]["history_id"] == history_id  # so the UI can save edits
 
     record = client.get(f"/api/history/{history_id}").json()
-    assert record["filename"] == "sample_deed.pdf"
+    assert record["filename"] == "sample_deed.pdf" and record["result"]["deed"] == sample_truth
     assert "pdf" not in {k.lower() for k in record}  # results only
     corrected = {**sample_truth, "transaction": {**sample_truth["transaction"], "price": 1}}
     saved = client.put(f"/api/history/{history_id}", json={"edited": corrected, "reviewed": ["property.kaek"]})

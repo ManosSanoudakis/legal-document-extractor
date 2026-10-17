@@ -1,6 +1,6 @@
 import copy
 
-from accuracy import score_accuracy, values_match
+from deed_extractor.accuracy import score_accuracy, values_match
 
 
 def test_perfect_prediction(sample_truth):

@@ -15,6 +15,7 @@ The pipeline converts a PDF into page images (plus the PDF's own text, when it h
 - **Review list and second look**: flagged values form a to-do list with a tick per field. "Second look" reads only those fields again at higher resolution, without showing the model its first answer, and shows whether the two readings agree.
 - **Batch and background jobs**: up to 20 deeds at once, processed in the background with a live progress table, and exported together as one spreadsheet.
 - **History**: every result is saved with the user's corrections and review ticks — the extracted values only, never the PDF.
+- **Demo without a key**: three fictional deeds open on real answers Gemini gave in a benchmark run, so anyone can look around before getting an API key.
 - **Measured accuracy**: a labelled set of fictional deeds gives field-level accuracy, not just a count of filled-in fields.
 - **Model comparison**: Gemini Flash and Flash-Lite run side by side on the same document, scored on accuracy, completeness and latency. Both are on the free tier; Pro can be added on a paid key.
 - **Source for every value**: the model cites the page and exact text each value came from; one click shows that page in the preview.
@@ -22,7 +23,7 @@ The pipeline converts a PDF into page images (plus the PDF's own text, when it h
 
 ![Extraction results for the fictional sample deed](docs/screenshots/extraction.png)
 
-<sub>Screenshots use the fictional sample deed with demo data (no model call). Regenerate them from a real run with `python scripts/screenshots.py` and a `GEMINI_API_KEY`.</sub>
+<sub>Screenshots show the first demo deed: a real Gemini answer saved from a benchmark run, with the checks re-run (the batch screenshot repeats it for each file unless `GEMINI_API_KEY` is set). Regenerate them with `python scripts/screenshots.py`.</sub>
 
 | Source quotes | Editing | Batch |
 |---|---|---|
@@ -33,19 +34,20 @@ The pipeline converts a PDF into page images (plus the PDF's own text, when it h
 ## Architecture
 
 ```
-PDF
+PDF                                  (all in deed_extractor/)
  ├── pdf_to_images()        # PyMuPDF → JPEG pages (temporary, deleted after use)
  └── pdf_page_texts()       # the PDF's text layer per page ("" for a scanned page)
       └── BaseExtractor
            └── GeminiExtractor.extract()   # images + text + prompt → JSON constrained by schema.Deed
-                ├── validate_deed()        # ΑΦΜ, ΚΑΕΚ, date, amount and text-layer checks → _validation
-                ├── run_pipeline()         # public entry point
+                ├── validate_deed()        # ΑΦΜ, ΚΑΕΚ, date, amount and text-layer checks
+                ├── run_pipeline()         # public entry point → ExtractionResult (deed, meta, validation)
                 └── run_recheck()          # second look at flagged fields, 300 dpi, cited pages only
                      ├── evaluate.py       # Flash vs Flash-Lite on one document (+ accuracy if truth known)
                      ├── benchmark.py      # accuracy over a labelled dataset
                      └── api.py            # FastAPI REST endpoints
-                          ├── jobs.py      # background jobs: one document at a time, progress per document
+                          ├── jobs.py      # every long task as a background job, with progress per document
                           ├── history.py   # SQLite: results, corrections, review ticks (never PDFs)
+                          ├── demo.py      # saved answers for the demo deeds (no key, no model call)
                           └── frontend/    # React UI (served by nginx, proxies /api)
 ```
 
@@ -68,7 +70,9 @@ An image can be misread; a digital PDF's text cannot. The model gets both: the i
 An agent loop (think → call a tool → think) costs several model calls per document and is hard to measure. The errors that remain are few and already flagged, so one extra call is enough: only the flagged fields, only the pages they were cited on, at 300 dpi, and without the first answer in the prompt so the second reading cannot simply repeat it.
 
 ### Why background jobs?
-An extraction takes 20–80 seconds. Holding an HTTP request open that long risks proxy and browser timeouts and shows the user nothing. A job returns at once; the browser polls each document's stage. Documents in a batch run one at a time because free-tier limits are per minute and per day, and a rejected key or exhausted quota stops the rest of the job instead of failing once per document.
+An extraction takes 20–80 seconds. Holding an HTTP request open that long risks proxy and browser timeouts and shows the user nothing. A job returns at once; the browser polls each document's stage. Every long task goes this way (extraction, model evaluation and second look are all `POST /api/jobs` with a `task`), so there is one way to run slow work, one place for limits, and one place for errors. Documents in a batch run one at a time because free-tier limits are per minute and per day, and a rejected key or exhausted quota stops the rest of the job instead of failing once per document.
+
+Jobs are kept in the API process's memory, on purpose: one server for one office needs no queue or broker. The cost is that a restart loses running jobs, and two API processes would not see each other's jobs. Scaling out would mean a persistent queue (e.g. Redis or the existing SQLite) and separate worker processes; `JobStore` is the only class that would change.
 
 ### Why store results but not PDFs?
 A deed is full of personal data. History keeps what the user needs to come back to (the extracted values, their corrections and which flags they checked) and nothing more. `HISTORY_RETENTION_DAYS` deletes old entries. The app has no login, so everyone who can reach it sees the same history: run it locally or behind your own access control.
@@ -91,8 +95,11 @@ A reviewer should not have to search a 20-page deed to verify one tax ID. Each v
 ### Why `area_sqm` and `price` as numbers, not strings?
 To support downstream calculations (e.g. price per sqm) without extra parsing. A string would require conversion every time.
 
-### Why `_meta` in every response?
-Observability — knowing which model ran, how many pages were processed, and how long it took is essential for debugging and evaluation.
+### Why a typed result?
+Every extraction returns an `ExtractionResult` (in `schema.py`): the `deed`, its `meta` (model, pages, whether the text was checked, seconds, history id) and its `validation` issues. Keeping the deed apart from what was said about it means the deed can be edited, validated and exported as it is, and the API docs show the exact shape. Results saved in history before this change are read in their old shape (deed keys next to `_meta` and `_validation`) and converted on load.
+
+### Why a demo that needs no key?
+Most people looking at the app will not make an API key first. The demo deeds open at once on answers Gemini really gave in a benchmark run (`samples/demo/`, built by `scripts/build_demo.py`), with the automatic checks run again by the current code. Nothing is invented, and one of them is the ΚΑΕΚ misread that only the text check catches. With a key, the same deeds can be extracted or evaluated live, and the evaluation scores accuracy because their correct values are known.
 
 ### Why DPI 150 for page images?
 A trade-off between quality and speed. Lower DPI means smaller files and faster API calls but risks losing fine text. 150 DPI was sufficient for this document type.
@@ -101,7 +108,7 @@ A trade-off between quality and speed. Lower DPI means smaller files and faster 
 Separating the API from the UI means the extraction service can be used by any client (scripts, other services) and the frontend has full control over layout and interaction. FastAPI also generates interactive API docs automatically.
 
 ### Why does each user bring their own API key?
-No key is stored on the server. The browser keeps the key in memory and sends it per request in the `X-Gemini-Key` header, so nobody can spend someone else's quota.
+No key is stored on the server. The browser keeps the key in memory and sends it per request in the `X-Gemini-Key` header, so nobody can spend someone else's quota; the demo covers people without one. For real client deeds, use a paid key: Google's terms allow content sent on the free tier to be used to improve its products, which personal data should not be. A firm would then keep its own key on the server and add logins (see `TODO: SECURITY` in `deed_extractor/api.py`).
 
 ### Evaluation methodology
 Real deeds cannot be shared, so `samples/make_sample_deed.py` generates fictional deeds together with a JSON file of the correct values. That makes three measurements possible:
@@ -126,18 +133,21 @@ All of these share one template, so a model could do well by learning its wordin
 
 ```
 .
-├── api.py                          # FastAPI REST API
-├── extractor.py                    # PDF → images → VLM → JSON
-├── schema.py                       # Pydantic output schema sent to Gemini
-├── validators.py                   # ΑΦΜ, ΚΑΕΚ, date and amount checks
-├── accuracy.py                     # Field-level scoring against ground truth
-├── evaluate.py                     # Flash vs Flash-Lite on one document
-├── benchmark.py                    # Accuracy over the labelled dataset
-├── export.py                       # Excel / CSV export, one deed or many
-├── jobs.py                         # Background extraction jobs with progress
-├── history.py                      # Saved results (SQLite), never PDFs
+├── deed_extractor/                 # The backend package
+│   ├── api.py                      # FastAPI REST API
+│   ├── extractor.py                # PDF → images (+ text) → VLM → ExtractionResult; second look
+│   ├── schema.py                   # Pydantic schema sent to Gemini, and the result types
+│   ├── validators.py               # ΑΦΜ, ΚΑΕΚ, date, amount and text-layer checks
+│   ├── accuracy.py                 # Field-level scoring against ground truth
+│   ├── evaluate.py                 # Flash vs Flash-Lite on one document
+│   ├── benchmark.py                # Accuracy over a labelled dataset
+│   ├── export.py                   # Excel / CSV export, one deed or many
+│   ├── jobs.py                     # Background jobs with progress
+│   ├── history.py                  # Saved results (SQLite), never PDFs
+│   └── demo.py                     # Saved answers for the demo deeds
 ├── samples/
-│   ├── sample_deed.pdf / .json     # Fictional demo deed + its correct values
+│   ├── sample_deed.pdf / .json     # Fictional sample deed + its correct values
+│   ├── demo/                       # 3 long deeds with a saved Gemini answer and their correct values
 │   ├── dataset/                    # 10 more fictional deeds, each with a .json
 │   ├── dataset_scanned/            # The same 10 as simulated scans
 │   ├── dataset_long/               # 10 long deeds full of look-alike values
@@ -145,7 +155,9 @@ All of these share one template, so a model could do well by learning its wordin
 │   ├── dataset_varied_scanned/     # The same 10 as harsh scans (stamps, signatures, notes)
 │   └── make_sample_deed.py         # Script that generates them
 ├── tests/                          # pytest suite (no API key needed)
-├── scripts/screenshots.py          # Regenerates docs/screenshots/
+├── scripts/
+│   ├── build_demo.py               # Builds samples/demo/ from a saved benchmark run
+│   └── screenshots.py              # Regenerates docs/screenshots/
 ├── .github/workflows/ci.yml        # Lint, tests, frontend build, Docker build
 ├── frontend/                       # React + TypeScript + Tailwind (Vite)
 │   ├── src/
@@ -161,7 +173,7 @@ All of these share one template, so a model could do well by learning its wordin
 └── requirements-dev.txt            # + pytest, ruff
 ```
 
-> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and all datasets with `python samples/make_sample_deed.py --dataset 10 --scanned --long 10 --varied 10 --harsh`.
+> **Note:** The app was developed and tested against a real Greek notarial deed, which cannot be shared publicly due to GDPR — it contains personal data (names, ID numbers, addresses). Instead, `samples/sample_deed.pdf` is a **fictional** sale deed in the same format: every name, number and address is invented, and the tax IDs deliberately fail the official check-digit test so they cannot belong to a real person (which is also why the app's checks flag them). Regenerate the sample and all datasets with `python samples/make_sample_deed.py --dataset 10 --scanned --long 10 --varied 10 --harsh`, and the demo with `python scripts/build_demo.py`.
 
 ---
 
@@ -184,7 +196,7 @@ Requires Python 3.11+ and Node.js 20+.
 python -m venv venv
 venv\Scripts\activate          # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
-uvicorn api:app --reload
+uvicorn deed_extractor.api:app --reload
 
 # Terminal 2 — frontend on :5173 (proxies /api to :8000)
 cd frontend
@@ -198,16 +210,16 @@ Open [http://localhost:5173](http://localhost:5173). Interactive API docs are at
 
 ```bash
 set GEMINI_API_KEY=your-key       # macOS/Linux: export GEMINI_API_KEY=your-key
-python extractor.py --pdf samples/sample_deed.pdf
-python evaluate.py  --pdf samples/sample_deed.pdf --truth samples/sample_deed.json
-python benchmark.py                # accuracy over samples/dataset, saved to benchmark_results.json
-python benchmark.py --dataset samples/dataset_scanned --output benchmark_scanned.json
-python benchmark.py --dataset samples/dataset_long --output benchmark_long.json
-python benchmark.py --dataset samples/dataset_varied --output benchmark_varied.json
-python benchmark.py --dataset samples/dataset_varied_scanned --output benchmark_varied_scanned.json
+python -m deed_extractor.extractor --pdf samples/sample_deed.pdf
+python -m deed_extractor.evaluate  --pdf samples/sample_deed.pdf --truth samples/sample_deed.json
+python -m deed_extractor.benchmark          # accuracy over samples/dataset, saved to benchmark_results.json
+python -m deed_extractor.benchmark --dataset samples/dataset_scanned --output benchmark_scanned.json
+python -m deed_extractor.benchmark --dataset samples/dataset_long --output benchmark_long.json
+python -m deed_extractor.benchmark --dataset samples/dataset_varied --output benchmark_varied.json
+python -m deed_extractor.benchmark --dataset samples/dataset_varied_scanned --output benchmark_varied_scanned.json
 ```
 
-`benchmark.py` saves each model's raw output, so a change to the scoring can be re-applied later without new API calls. Add `--models gemini-3.8-flash` to spend only one model's quota.
+The benchmark saves each model's raw output, so a change to the scoring can be re-applied later without new API calls. Add `--models gemini-3.8-flash` to spend only one model's quota.
 
 ### Tests and linting
 
@@ -236,29 +248,29 @@ docker compose up --build                                    # docker-compose.ym
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/config` | Available models, limits, whether the sample exists |
+| `GET` | `/api/config` | Available models, limits, whether the sample exists, the demo deeds |
 | `GET` | `/api/sample` | The fictional sample deed (PDF) |
-| `POST` | `/api/extract` | Multipart: `file` or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. Waits for the result. |
-| `POST` | `/api/jobs` | Multipart: one or more `files` (up to 20) or `use_sample=true`, optional `model`. Header `X-Gemini-Key`. Returns a job at once. |
+| `GET` | `/api/demo/{id}` | A demo deed's saved result. No key needed. |
+| `GET` | `/api/demo/{id}/pdf` | A demo deed (PDF) |
+| `POST` | `/api/jobs` | Multipart, header `X-Gemini-Key`. The document: `files`, `use_sample=true` or `demo={id}`. `task`: `extract` (default; up to 20 files, optional `model`, results saved to history), `evaluate` (one document, every model; scored for the sample and demos) or `recheck` (one document, `deed` and `fields` as JSON, optional `model`). Returns a job at once. |
 | `GET` | `/api/jobs/{id}` | Progress: each document's stage, time and a short summary. Finished jobs are kept for an hour. |
-| `GET` | `/api/jobs/{id}/documents/{doc}` | One document's full result. |
-| `POST` | `/api/recheck` | Multipart: the document, `deed` (JSON) and `fields` (JSON list of paths). One call that reads those fields again. |
+| `GET` | `/api/jobs/{id}/documents/{doc}` | One document's result: an `ExtractionResult`, an evaluation report or a re-check, by task. |
 | `GET` | `/api/history` | Saved results, newest first, with what is left to check. |
 | `GET` / `PUT` / `DELETE` | `/api/history/{id}` | One saved result: read it, save corrections and review ticks, or delete it. |
-| `POST` | `/api/evaluate` | Multipart: `file` or `use_sample=true`. Header `X-Gemini-Key`. For the sample, also scores accuracy against its known answers. |
 | `POST` | `/api/validate` | JSON deed (e.g. after manual corrections). Returns `{"issues": [...]}`. |
 | `POST` | `/api/export?format=xlsx\|csv` | JSON deed. Returns an Excel file (sheets *Deed* and *People*) or a CSV. |
 | `POST` | `/api/export/batch?format=xlsx\|csv` | `{"deeds": [{"name": ..., "deed": ...}]}`. One row per deed (sheets *Deeds* and *People*). |
 
-Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Busy (429) and server (5xx) errors from Gemini are retried up to 3 times with backoff. Every extraction response includes `sources` (page and quote per value), `_validation` (failed checks, empty when all pass) and `_meta` (model, pages, whether the text layer was used, seconds, and the history id).
+Uploads are limited to 20 MB and 30 pages, and model output is capped at 16k tokens. Busy (429) and server (5xx) errors from Gemini are retried up to 3 times with backoff. Every extraction result has the `deed` (with `sources`: page and quote per value), `validation` (failed checks, empty when all pass), `meta` (model, pages, whether the text was checked, seconds, and the history id) and `error` (set if the model's answer could not be parsed).
 
 ---
 
 ## Usage
 
+0. Without a key: the app opens on a **Demo** deed with a saved answer. Pick another demo, open the review list and sources, edit and export
 1. Get a free Gemini API key at [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
 2. Paste it into **Settings** and pick a model (Flash: stronger / Flash-Lite: faster, larger free quota)
-3. Keep the **Sample deed** selected, or switch to **Upload PDF** and drop in your own deed
+3. Keep a **Demo** deed, choose the **Sample deed**, or switch to **Upload PDF** and drop in your own deed
 4. Click **Extract**
 5. Work through the flagged values: hover a page link (**p. 1**) to see the quote, click it to open that page, tick each field once checked. **Second look** reads the flagged fields again (one request)
 6. Click **Edit values** to correct anything, then download **Excel** or **CSV**. Corrections and ticks are saved to history as you go
@@ -296,6 +308,7 @@ For many deeds, use the **Batch** tab: drop up to 20 PDFs, follow the progress, 
 - **Add or remove parties while editing**: editing currently changes existing values only
 - **Native PDF input**: Gemini accepts PDFs directly, which would remove the image conversion step
 - **Multi-document support**: different schemas and prompts per document type (lease, will, etc.)
-- **Authentication & usage limits**: needed before hosting the app publicly (see `TODO: SECURITY` in `api.py`)
+- **Authentication & usage limits**: needed before hosting the app publicly (see `TODO: SECURITY` in `deed_extractor/api.py`)
 - **Confidence scores**: prompt the model to return a confidence value per field
+- **Persistent jobs**: a queue and separate workers, so jobs survive a restart and the API can run as several processes
 - **Mixed PDFs**: the text check runs only when every page has text; a deed with some scanned pages could check the pages that do

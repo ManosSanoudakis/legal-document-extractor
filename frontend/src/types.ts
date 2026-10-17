@@ -14,7 +14,8 @@ export interface Representative {
   id_document?: string | null;
 }
 
-export interface ExtractionResult {
+/** The deed's data, in the shape of schema.Deed. */
+export interface Deed {
   notary?: { name?: string | null; location?: string | null; registry_number?: string | null } | null;
   sellers?: Party[] | null;
   buyers?: Party[] | null;
@@ -30,17 +31,26 @@ export interface ExtractionResult {
   } | null;
   transaction?: { deed_type?: string | null; price?: number | string | null; date?: string | null } | null;
   sources?: Source[] | null;
-  _meta?: {
+}
+
+/** One extraction (schema.ExtractionResult): the deed, how it was made, and what failed the checks. */
+export interface ExtractionResult {
+  deed: Deed;
+  meta: {
     model: string;
     provider: string;
     pages: number;
-    text_layer?: boolean;
+    /** Every page had text, so the values were checked against it */
+    text_layer: boolean;
     elapsed_seconds: number;
     /** Set when the result is in history, so edits can be saved there */
-    history_id?: string;
+    history_id?: string | null;
+    /** e.g. where a demo result came from */
+    note?: string | null;
   };
-  _validation?: ValidationIssue[];
-  _error?: string;
+  validation: ValidationIssue[];
+  /** The model's answer could not be parsed */
+  error?: string | null;
 }
 
 /** Where the model found a value: page number and the exact text it read. */
@@ -59,6 +69,13 @@ export interface RecheckAnswer {
   agrees: boolean;
   /** null when the PDF has no text layer to look in */
   found_in_text: boolean | null;
+}
+
+export interface RecheckResult {
+  answers: RecheckAnswer[];
+  model: string;
+  pages: number[];
+  elapsed_seconds: number;
 }
 
 /** A sanity check that failed (see validators.py). */
@@ -99,12 +116,20 @@ export interface EvaluationReport {
   models: ModelRun[];
   field_diffs?: { field: string; model_a: unknown; model_b: unknown }[];
   winner?: { accuracy: string; basis?: "accuracy" | "completeness"; tie?: boolean; speed: string };
-  raw_results: Record<string, ExtractionResult>;
+  raw_results: Record<string, ExtractionResult | null>;
+}
+
+/** A fictional deed with a saved model answer, shown without an API key (see demo.py). */
+export interface DemoDeed {
+  id: string;
+  title: string;
+  description: string;
 }
 
 export interface AppConfig {
   models: string[];
   sample_available: boolean;
+  demos: DemoDeed[];
   max_file_mb: number;
   max_pages: number;
   max_batch_files: number;
@@ -140,16 +165,19 @@ export interface HistoryRecord {
   created: number;
   updated: number;
   result: ExtractionResult;
-  edited: ExtractionResult | null;
+  edited: Deed | null;
   reviewed: string[];
 }
 
+export type JobTask = "extract" | "evaluate" | "recheck";
+
 export interface Job {
   id: string;
-  model: string;
+  kind: JobTask;
+  model: string | null;
   status: "running" | "done";
   documents: JobDocument[];
 }
 
-/** The document the user picked: the bundled sample or an uploaded file. */
-export type DocumentChoice = { kind: "sample" } | { kind: "upload"; file: File };
+/** The document the user picked: a demo deed, the bundled sample or an uploaded file. */
+export type DocumentChoice = { kind: "demo"; demo: DemoDeed } | { kind: "sample" } | { kind: "upload"; file: File };

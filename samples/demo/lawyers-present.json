@@ -1,0 +1,203 @@
+{
+  "deed": {
+    "notary": {
+      "name": "Δήμητρα Δείγμα",
+      "location": "Θεσσαλονίκη",
+      "registry_number": "2.943"
+    },
+    "sellers": [
+      {
+        "full_name": "Δήμητρα Παράδειγμα του Κωνσταντίνου",
+        "tax_id": "448490633",
+        "id_document": "AN 236499",
+        "address": "Οδός Ανύπαρκτης 51, Θεσσαλονίκη"
+      },
+      {
+        "full_name": "Δήμητρα Φανταστική του Παναγιώτη",
+        "tax_id": "887795929",
+        "id_document": "AH 250486",
+        "address": "Οδός Ανύπαρκτης 56, Θεσσαλονίκη"
+      }
+    ],
+    "buyers": [
+      {
+        "full_name": "Ευαγγελία Φανταστική του Δημητρίου",
+        "tax_id": "529417592",
+        "id_document": "AX 251597",
+        "address": "Οδός Φανταστικής 55, Πάτρα"
+      }
+    ],
+    "legal_representatives": [],
+    "property": {
+      "type": "κατάστημα",
+      "address": "Οδός Ανύπαρκτης 16, Θεσσαλονίκη",
+      "municipal_unit": "Τριανδρίας",
+      "floor": "ισόγειο",
+      "area_sqm": 178.61,
+      "kaek": "996907583009/0/8",
+      "building_permit": "5324/1998 του Πολεοδομικού Γραφείου Δοκιμών"
+    },
+    "transaction": {
+      "deed_type": "sale",
+      "price": 535500.0,
+      "date": "2020-07-12"
+    },
+    "sources": [
+      {
+        "field": "notary.name",
+        "page": 1,
+        "quote": "εγώ, η συμβολαιογράφος με έδρα τη Θεσσαλονίκη, Δήμητρα Δείγμα"
+      },
+      {
+        "field": "notary.location",
+        "page": 1,
+        "quote": "με έδρα τη Θεσσαλονίκη"
+      },
+      {
+        "field": "notary.registry_number",
+        "page": 1,
+        "quote": "Αριθμός 2.943"
+      },
+      {
+        "field": "sellers[0].full_name",
+        "page": 1,
+        "quote": "Δήμητρα Παράδειγμα του Κωνσταντίνου"
+      },
+      {
+        "field": "sellers[0].tax_id",
+        "page": 1,
+        "quote": "με Α.Φ.Μ. 448490633"
+      },
+      {
+        "field": "sellers[0].id_document",
+        "page": 1,
+        "quote": "αριθμό δελτίου ταυτότητας AN 236499"
+      },
+      {
+        "field": "sellers[0].address",
+        "page": 1,
+        "quote": "κάτοικος Οδός Ανύπαρκτης 51, Θεσσαλονίκη"
+      },
+      {
+        "field": "sellers[1].full_name",
+        "page": 1,
+        "quote": "Δήμητρα Φανταστική του Παναγιώτη"
+      },
+      {
+        "field": "sellers[1].tax_id",
+        "page": 1,
+        "quote": "με Α.Φ.Μ. 887795929"
+      },
+      {
+        "field": "sellers[1].id_document",
+        "page": 1,
+        "quote": "αριθμό δελτίου ταυτότητας AH 250486"
+      },
+      {
+        "field": "sellers[1].address",
+        "page": 1,
+        "quote": "κάτοικος Οδός Ανύπαρκτης 56, Θεσσαλονίκη"
+      },
+      {
+        "field": "buyers[0].full_name",
+        "page": 1,
+        "quote": "Ευαγγελία Φανταστική του Δημητρίου"
+      },
+      {
+        "field": "buyers[0].tax_id",
+        "page": 1,
+        "quote": "με Α.Φ.Μ. 529417592"
+      },
+      {
+        "field": "buyers[0].id_document",
+        "page": 1,
+        "quote": "αριθμό δελτίου ταυτότητας AX 251597"
+      },
+      {
+        "field": "buyers[0].address",
+        "page": 1,
+        "quote": "κάτοικος Οδός Φανταστικής 55, Πάτρα"
+      },
+      {
+        "field": "property.type",
+        "page": 1,
+        "quote": "συγκύριοι ενός ακινήτου (κατάστημα)"
+      },
+      {
+        "field": "property.address",
+        "page": 1,
+        "quote": "που βρίσκεται στη διεύθυνση Οδός Ανύπαρκτης 16, Θεσσαλονίκη"
+      },
+      {
+        "field": "property.municipal_unit",
+        "page": 1,
+        "quote": "στη Δημοτική Ενότητα Τριανδρίας"
+      },
+      {
+        "field": "property.floor",
+        "page": 1,
+        "quote": "ισόγειο, εμβαδού 178,61 τετραγωνικών μέτρων"
+      },
+      {
+        "field": "property.area_sqm",
+        "page": 1,
+        "quote": "εμβαδού 178,61 τετραγωνικών μέτρων (τ.μ.)"
+      },
+      {
+        "field": "property.kaek",
+        "page": 1,
+        "quote": "Κωδικό Αριθμό Εθνικού Κτηματολογίου (ΚΑΕΚ) 996907583009/0/8"
+      },
+      {
+        "field": "property.building_permit",
+        "page": 1,
+        "quote": "δυνάμει της υπ' αριθμ. 5324/1998 του Πολεοδομικού Γραφείου Δοκιμών άδειας"
+      },
+      {
+        "field": "transaction.deed_type",
+        "page": 1,
+        "quote": "ΣΥΜΒΟΛΑΙΟ ΠΩΛΗΣΗΣ ΑΚΙΝΗΤΟΥ"
+      },
+      {
+        "field": "transaction.price",
+        "page": 5,
+        "quote": "Το συμφωνημένο τίμημα ανέρχεται στο ποσό των 535.500,00 €"
+      },
+      {
+        "field": "transaction.date",
+        "page": 1,
+        "quote": "Στη Θεσσαλονίκη σήμερα, 12.07.2020"
+      }
+    ]
+  },
+  "meta": {
+    "model": "gemini-3.8-flash",
+    "provider": "gemini",
+    "pages": 7,
+    "text_layer": true,
+    "elapsed_seconds": 57.34,
+    "history_id": null,
+    "note": "A saved answer from a benchmark run (gemini-3.8-flash, page images only); the checks were run again with the current code. The tax IDs in these fictional deeds are deliberately invalid, so the check-digit test flags every one of them."
+  },
+  "validation": [
+    {
+      "field": "sellers[0].tax_id",
+      "value": "448490633",
+      "message": "ΑΦΜ fails the official check-digit test.",
+      "severity": "error"
+    },
+    {
+      "field": "sellers[1].tax_id",
+      "value": "887795929",
+      "message": "ΑΦΜ fails the official check-digit test.",
+      "severity": "error"
+    },
+    {
+      "field": "buyers[0].tax_id",
+      "value": "529417592",
+      "message": "ΑΦΜ fails the official check-digit test.",
+      "severity": "error"
+    }
+  ],
+  "error": null
+}

@@ -17,7 +17,8 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from jobs import summary
+from .jobs import summary
+from .schema import ExtractionResult
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -26,16 +27,16 @@ CREATE TABLE IF NOT EXISTS documents (
     model    TEXT NOT NULL,
     created  REAL NOT NULL,
     updated  REAL NOT NULL,
-    result   TEXT NOT NULL,  -- the model's answer, with _validation and _meta
+    result   TEXT NOT NULL,  -- the ExtractionResult: the model's deed, checks and meta
     edited   TEXT,           -- the deed as the user corrected it, if they did
     reviewed TEXT NOT NULL   -- JSON list of flagged fields the user has checked
 )
 """
 
 
-def to_check(result: dict, reviewed: list[str]) -> int:
+def to_check(result: ExtractionResult, reviewed: list[str]) -> int:
     """Flagged fields the user has not ticked as checked yet."""
-    flagged = {i.get("field") for i in result.get("_validation") or []}
+    flagged = {i.field for i in result.validation}
     return len(flagged - set(reviewed))
 
 
@@ -61,13 +62,13 @@ class History:
         if self.retention_days:
             self._run("DELETE FROM documents WHERE created < ?", (time.time() - self.retention_days * 86400,))
 
-    def add(self, filename: str, model: str, result: dict) -> str:
+    def add(self, filename: str, model: str, result: ExtractionResult) -> str:
         doc_id = uuid.uuid4().hex
         now = time.time()
         self._run(
             "INSERT INTO documents (id, filename, model, created, updated, result, edited, reviewed) "
             "VALUES (?, ?, ?, ?, ?, ?, NULL, '[]')",
-            (doc_id, filename, model, now, now, json.dumps(result, ensure_ascii=False)),
+            (doc_id, filename, model, now, now, result.model_dump_json()),
         )
         return doc_id
 
@@ -76,8 +77,8 @@ class History:
         rows = self._run("SELECT * FROM documents ORDER BY created DESC LIMIT ?", (limit,))
         items = []
         for row in rows:
-            result, reviewed = json.loads(row["result"]), json.loads(row["reviewed"])
-            current = json.loads(row["edited"]) if row["edited"] else result
+            result, reviewed = self._result(row), json.loads(row["reviewed"])
+            current = json.loads(row["edited"]) if row["edited"] else result.deed
             items.append({
                 "id": row["id"],
                 "filename": row["filename"],
@@ -85,7 +86,7 @@ class History:
                 "created": row["created"],
                 "updated": row["updated"],
                 "edited": row["edited"] is not None,
-                "summary": {**summary(current), "to_check": to_check(result, reviewed)},
+                "summary": {**summary(current, result.validation), "to_check": to_check(result, reviewed)},
             })
         return items
 
@@ -101,10 +102,16 @@ class History:
             "model": row["model"],
             "created": row["created"],
             "updated": row["updated"],
-            "result": json.loads(row["result"]),
+            "result": self._result(row),
             "edited": json.loads(row["edited"]) if row["edited"] else None,
             "reviewed": json.loads(row["reviewed"]),
         }
+
+    @staticmethod
+    def _result(row: sqlite3.Row) -> ExtractionResult:
+        result = ExtractionResult.load(json.loads(row["result"]), model=row["model"])
+        result.meta.history_id = row["id"]
+        return result
 
     def update(self, doc_id: str, edited: dict | None, reviewed: list[str]) -> bool:
         rows = self._run(
