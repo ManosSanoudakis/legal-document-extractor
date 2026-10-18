@@ -177,7 +177,7 @@
     "text_layer": true,
     "elapsed_seconds": 57.34,
     "history_id": null,
-    "note": "A saved answer from a benchmark run (gemini-3.8-flash, page images only); the checks were run again with the current code. The tax IDs in these fictional deeds are deliberately invalid, so the check-digit test flags every one of them."
+    "note": "A saved answer from a benchmark run (gemini-3.8-flash, page images only). The checks were run again with the current code. The tax IDs in these fictional deeds are deliberately invalid, so the check-digit test flags every one of them."
   },
   "validation": [
     {

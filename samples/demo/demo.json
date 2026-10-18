@@ -2,12 +2,12 @@
   {
     "id": "kaek-misread",
     "title": "A misread ΚΑΕΚ",
-    "description": "Gemini swapped two digits of the land-registry code. It still has 12 digits and looks valid; only the check against the PDF's own text catches it."
+    "description": "Gemini swapped two digits of the land-registry code. It still has 12 digits and looks valid, so only the check against the PDF's own text catches it."
   },
   {
     "id": "lawyers-present",
     "title": "Lawyers at the signing",
-    "description": "Two lawyers attend and everyone signs in person. Before a prompt fix, the model listed the lawyers as representatives; here it correctly lists none."
+    "description": "Two lawyers attend and everyone signs in person. Before a prompt fix, the model listed the lawyers as representatives. Here it correctly lists none."
   },
   {
     "id": "missing-digit",

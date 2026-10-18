@@ -73,7 +73,7 @@ def read_upload(file: UploadFile) -> bytes:
     except Exception:  # noqa: BLE001
         raise HTTPException(422, "Could not read this PDF.") from None
     if pages > MAX_PAGES:
-        raise HTTPException(413, f"PDF has {pages} pages; the limit is {MAX_PAGES}.")
+        raise HTTPException(413, f"PDF has {pages} pages, but the limit is {MAX_PAGES}.")
     return data
 
 

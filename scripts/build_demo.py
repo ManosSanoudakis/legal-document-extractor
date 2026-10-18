@@ -32,14 +32,14 @@ DEMOS = [
         "pdf": "deed_01.pdf",
         "title": "A misread ΚΑΕΚ",
         "description": "Gemini swapped two digits of the land-registry code. It still has 12 digits and looks "
-                       "valid; only the check against the PDF's own text catches it.",
+                       "valid, so only the check against the PDF's own text catches it.",
     },
     {
         "id": "lawyers-present",
         "pdf": "deed_02.pdf",
         "title": "Lawyers at the signing",
         "description": "Two lawyers attend and everyone signs in person. Before a prompt fix, the model listed "
-                       "the lawyers as representatives; here it correctly lists none.",
+                       "the lawyers as representatives. Here it correctly lists none.",
     },
     {
         "id": "missing-digit",
@@ -74,7 +74,7 @@ def main() -> None:
         result.meta.text_layer = full_text is not None
         result.meta.history_id = None
         result.meta.note = (
-            f"A saved answer from a benchmark run ({result.meta.model}, page images only); the checks were run "
+            f"A saved answer from a benchmark run ({result.meta.model}, page images only). The checks were run "
             "again with the current code. The tax IDs in these fictional deeds are deliberately invalid, so the "
             "check-digit test flags every one of them."
         )

@@ -164,10 +164,12 @@ export default function App() {
                 />
               </div>
               <div className="p-5">
-                {view === "history" ? (
-                  <HistoryView />
-                ) : view === "batch" ? (
+                {/* Kept mounted while hidden, so the chosen files and a running batch survive a tab switch */}
+                <div hidden={view !== "batch"}>
                   <BatchView config={config} model={model} apiKey={apiKey} />
+                </div>
+                {view === "batch" ? null : view === "history" ? (
+                  <HistoryView />
                 ) : view === "extract" ? (
                   <RunPanel
                     intro={
